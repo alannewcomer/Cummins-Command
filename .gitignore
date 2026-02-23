@@ -72,6 +72,7 @@ android/app/google-services.json
 google-services.json
 *.jks
 *.keystore
+.git-credentials
 
 # Build outputs
 build/
