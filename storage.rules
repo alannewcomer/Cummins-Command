@@ -4,5 +4,12 @@ service firebase.storage {
     match /drives/{userId}/{vehicleId}/{driveId}/{file} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    match /parquet/{userId}/{vehicleId}/{file} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Write is server-only (Cloud Functions use admin SDK, bypasses rules)
+    }
+    match /exports/{userId}/{vehicleId}/{file} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
