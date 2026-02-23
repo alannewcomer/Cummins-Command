@@ -142,8 +142,14 @@ class DiagnosticService {
         },
         'entries': batch.map((e) => e.toMap()).toList(),
       });
-    } catch (_) {
-      // Don't let logging failures crash the app
+    } catch (e) {
+      // Don't let logging failures crash the app, but re-queue the batch
+      // so entries aren't silently lost.
+      _pending.insertAll(0, batch);
+      // Cap pending to prevent unbounded growth if Firestore is down
+      if (_pending.length > _maxEntries) {
+        _pending.removeRange(0, _pending.length - _maxEntries);
+      }
     }
   }
 

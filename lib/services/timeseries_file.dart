@@ -210,10 +210,32 @@ class TimeseriesReader {
   /// Decompress + decode column-oriented JSON into a list of DataPoints.
   static List<DataPoint> _decode(List<int> compressed) {
     final decompressed = gzip.decode(compressed);
-    final json = jsonDecode(utf8.decode(decompressed)) as Map<String, dynamic>;
-    final count = json['count'] as int;
-    final columns = json['columns'] as Map<String, dynamic>;
-    final timestamps = (columns['timestamp'] as List).cast<int>();
+    final decoded = jsonDecode(utf8.decode(decompressed));
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Timeseries root is not a JSON object');
+    }
+    final count = decoded['count'];
+    if (count is! int || count < 0) {
+      throw const FormatException('Timeseries count is missing or invalid');
+    }
+    final columns = decoded['columns'];
+    if (columns is! Map<String, dynamic>) {
+      throw const FormatException('Timeseries columns is missing or invalid');
+    }
+    final rawTimestamps = columns['timestamp'];
+    if (rawTimestamps is! List) {
+      throw const FormatException('Timeseries timestamps is missing or invalid');
+    }
+    final timestamps = <int>[];
+    for (final v in rawTimestamps) {
+      if (v is int) {
+        timestamps.add(v);
+      } else if (v is num) {
+        timestamps.add(v.toInt());
+      } else {
+        throw FormatException('Non-numeric timestamp value: $v');
+      }
+    }
 
     final points = <DataPoint>[];
     for (int i = 0; i < count; i++) {
@@ -221,9 +243,12 @@ class TimeseriesReader {
         'timestamp': timestamps[i],
       };
       for (final field in _columnFields) {
-        final col = columns[field] as List?;
-        if (col != null && i < col.length && col[i] != null) {
-          map[field] = (col[i] as num).toDouble();
+        final col = columns[field];
+        if (col is List && i < col.length && col[i] != null) {
+          final val = col[i];
+          if (val is num) {
+            map[field] = val.toDouble();
+          }
         }
       }
       points.add(DataPoint.fromMap('ts_$i', map));
