@@ -21,14 +21,6 @@ class LocationService {
   /// Whether the position stream is currently active.
   bool get isTracking => _tracking;
 
-  /// Live position stream (for consumers that want async updates).
-  Stream<Position> get positionStream => Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 5,
-        ),
-      );
-
   /// Request location permission and start the position stream.
   ///
   /// Returns `true` if GPS is active, `false` if permission was denied or

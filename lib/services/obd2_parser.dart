@@ -4,19 +4,6 @@
 // validates response codes, extracts data bytes, and handles multi-line
 // responses and error conditions.
 
-/// Result of parsing an OBD2 response.
-class Obd2ParseResult {
-  final int pid;
-  final List<int> dataBytes;
-
-  const Obd2ParseResult({required this.pid, required this.dataBytes});
-
-  @override
-  String toString() =>
-      'Obd2ParseResult(pid: 0x${pid.toRadixString(16).toUpperCase()}, '
-      'bytes: [${dataBytes.map((b) => '0x${b.toRadixString(16).toUpperCase().padLeft(2, '0')}').join(', ')}])';
-}
-
 class Obd2Parser {
   Obd2Parser._();
 
@@ -96,17 +83,6 @@ class Obd2Parser {
     if (multiResult != null) return multiResult;
 
     return null;
-  }
-
-  /// Parse a complete response that may return a structured result with PID.
-  static Obd2ParseResult? parseResponseFull(
-    String rawHex, {
-    required int expectedPid,
-    int mode = 0x01,
-  }) {
-    final bytes = parseResponse(rawHex, expectedPid: expectedPid, mode: mode);
-    if (bytes == null) return null;
-    return Obd2ParseResult(pid: expectedPid, dataBytes: bytes);
   }
 
   /// Checks if a cleaned response string represents an error.
@@ -266,10 +242,4 @@ class Obd2Parser {
     return null;
   }
 
-  /// Utility: convert a list of bytes to a hex string for debugging.
-  static String bytesToHex(List<int> bytes) {
-    return bytes
-        .map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0'))
-        .join(' ');
-  }
 }
