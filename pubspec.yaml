@@ -1,0 +1,84 @@
+name: myapp
+description: "Cummins Command V2 — AI-First Diesel Intelligence Platform"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod:
+
+  # Firebase
+  firebase_core:
+  firebase_auth:
+  google_sign_in:
+  cloud_firestore:
+  firebase_storage:
+  firebase_messaging:
+  firebase_remote_config:
+  firebase_ai:
+  firebase_app_check:
+
+  # Navigation
+  go_router:
+
+  # Charts (Syncfusion Community License) — gauges are now custom CustomPainter
+  syncfusion_flutter_charts:
+
+  # Icons
+  cupertino_icons:
+
+  # Typography
+  google_fonts:
+
+  # Utilities
+  intl:
+  uuid:
+  share_plus:
+  path_provider:
+  csv:
+  collection:
+
+  # Map
+  flutter_map: ^7.0.0
+  latlong2: ^0.9.0
+
+  # Bluetooth Classic (OBDLink MX+)
+  flutter_bluetooth_classic_serial: ^1.3.2
+
+  # GPS (device location for drive route maps)
+  geolocator: ^13.0.2
+
+  # Runtime permissions (Android 12+ BT requires runtime grant)
+  permission_handler: ^11.0.0
+
+  # Persistent key-value storage (saved adapter address for auto-connect)
+  shared_preferences:
+  flutter_background_service: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.2
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#07070F"
+    theme_color: "#FF6B00"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/

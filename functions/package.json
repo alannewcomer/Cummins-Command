@@ -1,0 +1,13 @@
+{
+  "name": "cummins-command-functions",
+  "description": "Cloud Functions for Cummins Command V2",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "firebase-functions": "^7.0.0",
+    "firebase-admin": "^12.0.0",
+    "@google/genai": "^1.0.0"
+  }
+}

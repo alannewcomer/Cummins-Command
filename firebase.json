@@ -1,0 +1,32 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "cummins-comand",
+          "appId": "1:6549990351:android:77b140fcea86358eec40ba",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "cummins-comand",
+          "configurations": {
+            "android": "1:6549990351:android:77b140fcea86358eec40ba",
+            "web": "1:6549990351:web:8c08b9301248706fec40ba"
+          }
+        }
+      }
+    }
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}

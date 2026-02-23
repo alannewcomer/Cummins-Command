@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User data — only accessible by the owner ──
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Vehicles
+      match /vehicles/{vehicleId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        // Drive sessions
+        match /drives/{driveId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+
+          // Raw datapoints (written by drive recorder, read by Cloud Functions)
+          match /datapoints/{datapointId} {
+            allow read, write: if request.auth != null && request.auth.uid == userId;
+          }
+        }
+
+        // Maintenance records
+        match /maintenance/{maintenanceId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        // Dashboard layouts
+        match /dashboards/{dashboardId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        // Sharing invitations created by owner
+        match /sharing/{shareId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        // DID scan results (dev tool)
+        match /didScans/{scanId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+
+      // AI job queue
+      match /aiJobs/{jobId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // User-level dashboards
+      match /dashboards/{dashboardId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Dev logs (diagnostic data)
+      match /devLogs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Vehicles shared TO this user
+      match /sharedVehicles/{vehicleId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ── Sharing invites — owner writes, invitee reads by email lookup ──
+    match /invites/{inviteId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.invitedEmail == request.auth.token.email ||
+        resource.data.ownerId == request.auth.uid
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.invitedEmail == request.auth.token.email
+      );
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
