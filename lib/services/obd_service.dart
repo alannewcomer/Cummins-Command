@@ -855,7 +855,7 @@ class ObdService {
         return null;
       }
 
-      final rawTruncated = _truncate80(response);
+      final rawTruncated = _truncate(response, 80);
 
       // Try parsing first — the parser handles multi-ECU responses correctly
       // by scanning each line for the expected response header (41xx/62xxxx).
@@ -1183,13 +1183,9 @@ class ObdService {
 
   // ─── Private: Utilities ───
 
-  String _truncate(String? s) {
+  String _truncate(String? s, [int maxLen = 120]) {
     if (s == null) return 'null';
-    return s.length > 120 ? '${s.substring(0, 120)}...' : s;
-  }
-
-  String _truncate80(String s) {
-    return s.length > 80 ? '${s.substring(0, 80)}...' : s;
+    return s.length > maxLen ? '${s.substring(0, maxLen)}...' : s;
   }
 
   static String _hexPid(int pid) =>

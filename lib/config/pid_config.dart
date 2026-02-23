@@ -50,15 +50,9 @@ double _parseRpm(List<int> b) => ((b[0] * 256) + b[1]) / 4.0;
 double _parseSingleByte(List<int> b) => b[0].toDouble();
 double _parseMaf(List<int> b) => ((b[0] * 256) + b[1]) / 100.0;
 double _parseVoltage(List<int> b) => ((b[0] * 256) + b[1]) / 1000.0;
-// _parseFuelRate removed — fuelRateObd PID removed, J1939 fuelRate used instead
 double _parseRuntime(List<int> b) => ((b[0] * 256) + b[1]).toDouble();
-double _parseFuelLevel(List<int> b) => b[0] * 100 / 255.0;
-// _parseKpa removed — intakeManifoldPressure PID removed
-// _parseOilTemp removed — oilTempObd PID removed, J1939 oilTemp used instead
-double _parseThrottle(List<int> b) => b[0] * 100 / 255.0;
-double _parseEngineLoad(List<int> b) => b[0] * 100 / 255.0;
+double _parsePercent(List<int> b) => b[0] * 100 / 255.0;
 double _parseBarometric(List<int> b) => b[0].toDouble();
-double _parseAmbientTemp(List<int> b) => (b[0] - 40) * 9 / 5 + 32;
 
 // OBD2 PID 0x6D — Fuel pressure control system (rail pressure, 6 data bytes)
 // Big-endian (OBD2 standard), bytes D-E = actual pressure
@@ -71,17 +65,13 @@ double _parseExhaustBackpressure(List<int> b) =>
 
 // ─── New OBD2 Parsers for Diesel-Specific PIDs ───
 
-// PID 0x49 — Accelerator Pedal Position D (1 byte, 0-100%)
-double _parseAccelPedalD(List<int> b) => b[0] * 100 / 255.0;
-
 // PID 0x61/0x62 — Demand/Actual Torque % (1 byte, -125 to +125%)
 double _parseTorquePercent(List<int> b) => b[0] - 125.0;
 
 // PID 0x63 — Reference Torque (2 bytes, Nm)
 double _parseReferenceTorque(List<int> b) => (b[0] * 256 + b[1]).toDouble();
 
-// PID 0x69 — Commanded EGR % (2 bytes: A=EGR%, B=EGR error)
-double _parseCommandedEgr(List<int> b) => b[0] * 100 / 255.0;
+// PID 0x69 — Commanded EGR % (2 bytes: A=EGR%, B=EGR error, only A used)
 
 // PID 0x78 — EGT Bank 1 (2 bytes, 0.1°C/bit - 40 → °F)
 double _parseEgtObd2(List<int> b) =>
@@ -133,7 +123,7 @@ class PidRegistry {
       responseBytes: 1, tier: PollTier.fast,
       minValue: 0, maxValue: 100, normalMin: 0, normalMax: 100,
       isCritical: true, aiContext: 'Calculated engine load via OBD2. 100% = full rated power.',
-      parser: _parseEngineLoad,
+      parser: _parsePercent,
     ),
     'coolantTemp': PidDefinition(
       id: 'coolantTemp', name: 'Coolant Temperature', shortName: 'CLT',
@@ -193,7 +183,7 @@ class PidRegistry {
       responseBytes: 1, tier: PollTier.background,
       minValue: 0, maxValue: 100, normalMin: 15, normalMax: 100,
       isCritical: false, aiContext: 'Fuel tank level percentage.',
-      parser: _parseFuelLevel,
+      parser: _parsePercent,
     ),
     'barometric': PidDefinition(
       id: 'barometric', name: 'Barometric Pressure', shortName: 'BARO',
@@ -217,7 +207,7 @@ class PidRegistry {
       responseBytes: 1, tier: PollTier.background,
       minValue: -40, maxValue: 215, normalMin: null, normalMax: null,
       isCritical: false, aiContext: 'Outside ambient air temperature.',
-      parser: _parseAmbientTemp,
+      parser: _parseTemp,
     ),
     // oilTempObd (0x5C) — REMOVED: returns NO DATA on 2026 Cummins.
     // J1939 oilTemp (SPN 175) provides this data.
@@ -261,7 +251,7 @@ class PidRegistry {
       responseBytes: 1, tier: PollTier.fast,
       minValue: 0, maxValue: 100, normalMin: 0, normalMax: 100,
       isCritical: false, aiContext: 'Accelerator pedal position. Replaces throttle PID 0x11 on diesel.',
-      parser: _parseAccelPedalD,
+      parser: _parsePercent,
     ),
     'demandTorque': PidDefinition(
       id: 'demandTorque', name: 'Demand Torque %', shortName: 'DT%',
@@ -293,7 +283,7 @@ class PidRegistry {
       responseBytes: 2, tier: PollTier.medium,
       minValue: 0, maxValue: 100, normalMin: null, normalMax: null,
       isCritical: false, aiContext: 'Commanded EGR valve opening percentage.',
-      parser: _parseCommandedEgr,
+      parser: _parsePercent,
     ),
     'commandedThrottle': PidDefinition(
       id: 'commandedThrottle', name: 'Commanded Throttle', shortName: 'THR-C',
@@ -301,7 +291,7 @@ class PidRegistry {
       responseBytes: 1, tier: PollTier.medium,
       minValue: 0, maxValue: 100, normalMin: 0, normalMax: 100,
       isCritical: false, aiContext: 'Commanded throttle actuator position.',
-      parser: _parseThrottle,
+      parser: _parsePercent,
     ),
     'boostPressureCtrl': PidDefinition(
       id: 'boostPressureCtrl', name: 'Boost Pressure Control', shortName: 'BST-C',
