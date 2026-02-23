@@ -8,6 +8,7 @@ import '../../models/dashboard_config.dart';
 import '../../providers/ai_provider.dart';
 import '../../providers/bluetooth_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../services/bluetooth_service.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/live_data_provider.dart';
 import '../../models/vehicle.dart';
@@ -59,12 +60,26 @@ class CommandCenterScreen extends ConsumerWidget {
             ),
           ),
 
-          // Connect prompt when disconnected
+          // Connect prompt when disconnected, or waiting card when sleeping
           if (!isConnected)
-            SliverToBoxAdapter(
-              child: _ConnectObdCard(
-                onConnect: () => context.push('/bluetooth-setup'),
-              ),
+            Consumer(
+              builder: (context, ref, _) {
+                final sleepPhase = ref.watch(sleepPhaseProvider);
+                final isSleeping = sleepPhase != SleepReconnectPhase.none;
+                if (isSleeping) {
+                  return SliverToBoxAdapter(
+                    child: _WaitingForEngineCard(
+                      phase: sleepPhase,
+                      onTap: () => context.push('/bluetooth-setup'),
+                    ),
+                  );
+                }
+                return SliverToBoxAdapter(
+                  child: _ConnectObdCard(
+                    onConnect: () => context.push('/bluetooth-setup'),
+                  ),
+                );
+              },
             ),
 
           // Dashboard Grid — shows real data or empty gauges
@@ -313,12 +328,22 @@ class _CommandCenterAppBar extends StatelessWidget {
         ),
       ),
       actions: [
-        // Connection indicator
+        // Connection indicator — shows LIVE / WAIT / OBD
         Padding(
           padding: const EdgeInsets.only(right: AppSpacing.lg),
           child: Consumer(
             builder: (context, ref, _) {
               final connected = ref.watch(isBluetoothConnectedProvider);
+              final sleepPhase = ref.watch(sleepPhaseProvider);
+              final isSleeping = !connected &&
+                  sleepPhase != SleepReconnectPhase.none;
+
+              final (label, color, icon) = connected
+                  ? ('LIVE', AppColors.success, Icons.bluetooth_connected)
+                  : isSleeping
+                      ? ('WAIT', AppColors.warning, Icons.bluetooth_searching)
+                      : ('OBD', AppColors.textTertiary as Color, Icons.bluetooth_disabled);
+
               return GestureDetector(
                 onTap: () => context.push('/bluetooth-setup'),
                 child: AnimatedContainer(
@@ -328,35 +353,21 @@ class _CommandCenterAppBar extends StatelessWidget {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: connected
-                        ? AppColors.success.withValues(alpha: 0.12)
-                        : AppColors.surfaceLight,
+                    color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(AppRadius.round),
                     border: Border.all(
-                      color: connected
-                          ? AppColors.success.withValues(alpha: 0.3)
-                          : AppColors.surfaceBorder,
+                      color: color.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        connected
-                            ? Icons.bluetooth_connected
-                            : Icons.bluetooth_disabled,
-                        size: 14,
-                        color: connected
-                            ? AppColors.success
-                            : AppColors.textTertiary,
-                      ),
+                      Icon(icon, size: 14, color: color),
                       const SizedBox(width: 4),
                       Text(
-                        connected ? 'LIVE' : 'OBD',
+                        label,
                         style: AppTypography.labelSmall.copyWith(
-                          color: connected
-                              ? AppColors.success
-                              : AppColors.textTertiary,
+                          color: color,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1,
                         ),
@@ -495,6 +506,88 @@ class _ConnectObdCardState extends State<_ConnectObdCard>
                     style: AppTypography.button,
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Waiting for Engine Card ───
+
+class _WaitingForEngineCard extends StatelessWidget {
+  final SleepReconnectPhase phase;
+  final VoidCallback onTap;
+
+  const _WaitingForEngineCard({required this.phase, required this.onTap});
+
+  String get _phaseLabel => switch (phase) {
+        SleepReconnectPhase.phaseA => 'Quick restart check (5 min)',
+        SleepReconnectPhase.phaseB => 'Adapter entering deep sleep',
+        SleepReconnectPhase.phaseC => 'Background monitoring',
+        SleepReconnectPhase.none => '',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: GlassCard(
+        glowColor: AppColors.warning,
+        borderColor: AppColors.warning.withValues(alpha: 0.3),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        onTap: onTap,
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.warning.withValues(alpha: 0.08),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.25),
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                Icons.bedtime_outlined,
+                size: 32,
+                color: AppColors.warning.withValues(alpha: 0.8),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Waiting for Engine Start',
+              style: AppTypography.displaySmall.copyWith(fontSize: 16),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Adapter is sleeping. Will auto-connect\nwhen the truck starts.',
+              style: AppTypography.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppRadius.round),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                _phaseLabel,
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -725,7 +818,7 @@ class _StatsBar extends StatelessWidget {
   }
 }
 
-class _RecordingIndicator extends StatefulWidget {
+class _RecordingIndicator extends ConsumerStatefulWidget {
   final bool isRecording;
   final bool isConnected;
 
@@ -735,10 +828,10 @@ class _RecordingIndicator extends StatefulWidget {
   });
 
   @override
-  State<_RecordingIndicator> createState() => _RecordingIndicatorState();
+  ConsumerState<_RecordingIndicator> createState() => _RecordingIndicatorState();
 }
 
-class _RecordingIndicatorState extends State<_RecordingIndicator>
+class _RecordingIndicatorState extends ConsumerState<_RecordingIndicator>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
 
@@ -772,22 +865,35 @@ class _RecordingIndicatorState extends State<_RecordingIndicator>
   @override
   Widget build(BuildContext context) {
     if (!widget.isConnected) {
+      final sleepPhase = ref.watch(sleepPhaseProvider);
+      final isSleeping = sleepPhase != SleepReconnectPhase.none;
+
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
+          color: isSleeping
+              ? AppColors.warning.withValues(alpha: 0.1)
+              : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(AppRadius.round),
-          border: Border.all(color: AppColors.surfaceBorder),
+          border: Border.all(
+            color: isSleeping
+                ? AppColors.warning.withValues(alpha: 0.3)
+                : AppColors.surfaceBorder,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.circle, size: 10, color: AppColors.textTertiary),
+            Icon(
+              isSleeping ? Icons.bedtime : Icons.circle,
+              size: 10,
+              color: isSleeping ? AppColors.warning : AppColors.textTertiary,
+            ),
             const SizedBox(width: 6),
             Text(
-              'Idle',
+              isSleeping ? 'SLEEP' : 'Idle',
               style: AppTypography.labelSmall.copyWith(
-                color: AppColors.textTertiary,
+                color: isSleeping ? AppColors.warning : AppColors.textTertiary,
                 fontWeight: FontWeight.w600,
               ),
             ),

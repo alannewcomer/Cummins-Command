@@ -16,6 +16,18 @@ enum BluetoothConnectionState {
   error,
 }
 
+/// Sleep reconnect phase — tracks what the service is doing after engine off.
+enum SleepReconnectPhase {
+  /// Not in sleep reconnect mode.
+  none,
+  /// Phase A: Quick restart detection (every 30s for 5 min).
+  phaseA,
+  /// Phase B: Quiet period letting MX+ BatterySaver power down BT radio.
+  phaseB,
+  /// Phase C: Background polling (every 60s, indefinite).
+  phaseC,
+}
+
 /// Represents a discovered Bluetooth device.
 class BluetoothDeviceInfo {
   final String name;
@@ -249,10 +261,14 @@ class BluetoothService {
   /// When the last sleep disconnect happened — used for loop detection.
   DateTime? _lastSleepDisconnect;
 
+  SleepReconnectPhase _sleepPhase = SleepReconnectPhase.none;
+
   final StreamController<BluetoothConnectionState> _stateController =
       StreamController<BluetoothConnectionState>.broadcast();
   final StreamController<String> _dataController =
       StreamController<String>.broadcast();
+  final StreamController<SleepReconnectPhase> _sleepPhaseController =
+      StreamController<SleepReconnectPhase>.broadcast();
 
   StreamSubscription<Uint8List>? _inputSubscription;
 
@@ -268,9 +284,17 @@ class BluetoothService {
   String? get lastError => _lastError;
   bool get isConnected => _state == BluetoothConnectionState.connected;
   int get reconnectAttempts => _reconnectAttempts;
+  String? get savedAddress => _sleepAddress ?? _connectedAddress;
 
   /// Stream of connection state changes.
   Stream<BluetoothConnectionState> get stateStream => _stateController.stream;
+
+  /// Current sleep reconnect phase.
+  SleepReconnectPhase get sleepPhase => _sleepPhase;
+
+  /// Stream of sleep reconnect phase changes (for UI).
+  Stream<SleepReconnectPhase> get sleepPhaseStream =>
+      _sleepPhaseController.stream;
 
   /// Stream of raw data received from the adapter.
   Stream<String> get dataStream => _dataController.stream;
@@ -333,6 +357,7 @@ class BluetoothService {
       _sleepAddress = null;
       _sleepReconnectTimer?.cancel();
       _sleepReconnectAttempts = 0;
+      _setSleepPhase(SleepReconnectPhase.none);
 
       // Start listening for incoming data
       _inputSubscription?.cancel();
@@ -376,6 +401,7 @@ class BluetoothService {
     _sleepReconnectTimer?.cancel();
     _sleepAddress = null;
     _sleepReconnectAttempts = 0;
+    _setSleepPhase(SleepReconnectPhase.none);
     _healthCheckTimer?.cancel();
     _inputSubscription?.cancel();
     _pendingResponse?.completeError(
@@ -577,6 +603,7 @@ class BluetoothService {
     _adapter.dispose();
     _stateController.close();
     _dataController.close();
+    _sleepPhaseController.close();
   }
 
   // ─── Private ───
@@ -592,6 +619,14 @@ class BluetoothService {
   void _setError(String message) {
     _lastError = message;
     _setState(BluetoothConnectionState.error);
+  }
+
+  void _setSleepPhase(SleepReconnectPhase phase) {
+    if (_sleepPhase == phase) return;
+    _sleepPhase = phase;
+    if (!_sleepPhaseController.isClosed) {
+      _sleepPhaseController.add(phase);
+    }
   }
 
   void _onDataReceived(Uint8List data) {
@@ -692,7 +727,7 @@ class BluetoothService {
     _lastSleepDisconnect = now;
 
     if (isLoop) {
-      // Loop detected: we reconnected and immediately went back to off.
+      // Loop detected: reconnected and immediately went back to off.
       // Skip Phase A, go directly to Phase B (quiet period).
       diag.info('BT-SVC', 'Sleep reconnect loop detected',
           'Last sleep disconnect was < ${AppConstants.sleepReconnectPhaseADuration.inMinutes}min ago — '
@@ -705,6 +740,7 @@ class BluetoothService {
 
   /// Phase A: Quick restart detection — every 30s for 5 minutes.
   void _startPhaseA() {
+    _setSleepPhase(SleepReconnectPhase.phaseA);
     final maxAttempts = AppConstants.sleepReconnectPhaseADuration.inSeconds ~/
         AppConstants.sleepReconnectPhaseAInterval.inSeconds;
 
@@ -748,6 +784,7 @@ class BluetoothService {
   /// (BT radio OFF). We must not poke it during this window.
   /// After the quiet period, transition to Phase C.
   void _startPhaseB() {
+    _setSleepPhase(SleepReconnectPhase.phaseB);
     _sleepReconnectTimer?.cancel();
     _sleepReconnectTimer = Timer(
       AppConstants.sleepReconnectPhaseBDuration,
@@ -767,6 +804,7 @@ class BluetoothService {
   /// impact on truck battery. When the truck starts, CAN activity wakes the
   /// MX+, BT radio turns on, and our next attempt succeeds.
   void _startPhaseC() {
+    _setSleepPhase(SleepReconnectPhase.phaseC);
     _sleepReconnectTimer?.cancel();
 
     diag.info('BT-SVC', 'Phase C started',

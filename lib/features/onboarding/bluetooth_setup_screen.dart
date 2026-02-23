@@ -92,34 +92,46 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
   Widget _buildStatusCard(
       AsyncValue<BluetoothConnectionState> btState, BluetoothService btService) {
     final state = btState.value ?? BluetoothConnectionState.disconnected;
+    final sleepPhase = ref.watch(sleepPhaseProvider);
+    final isSleeping = state == BluetoothConnectionState.disconnected &&
+        sleepPhase != SleepReconnectPhase.none;
 
-    final (statusText, statusColor, statusIcon) = switch (state) {
-      BluetoothConnectionState.connected => (
-          'Connected to OBDLink MX+',
-          AppColors.success,
-          Icons.bluetooth_connected,
-        ),
-      BluetoothConnectionState.connecting => (
-          'Connecting...',
-          AppColors.warning,
-          Icons.bluetooth_searching,
-        ),
-      BluetoothConnectionState.scanning => (
-          'Scanning for devices...',
-          AppColors.dataAccent,
-          Icons.bluetooth_searching,
-        ),
-      BluetoothConnectionState.error => (
-          _errorMessage ?? 'Connection error',
-          AppColors.critical,
-          Icons.bluetooth_disabled,
-        ),
-      BluetoothConnectionState.disconnected => (
-          'Not connected',
-          AppColors.textTertiary,
-          Icons.bluetooth,
-        ),
+    final sleepLabel = switch (sleepPhase) {
+      SleepReconnectPhase.phaseA => 'Waiting for engine — checking every 30s',
+      SleepReconnectPhase.phaseB => 'Adapter entering deep sleep — quiet period',
+      SleepReconnectPhase.phaseC => 'Background monitoring — checking every 60s',
+      SleepReconnectPhase.none => '',
     };
+
+    final (statusText, statusColor, statusIcon) = isSleeping
+        ? (sleepLabel, AppColors.warning, Icons.bedtime_outlined)
+        : switch (state) {
+            BluetoothConnectionState.connected => (
+                'Connected to OBDLink MX+',
+                AppColors.success,
+                Icons.bluetooth_connected,
+              ),
+            BluetoothConnectionState.connecting => (
+                'Connecting...',
+                AppColors.warning,
+                Icons.bluetooth_searching,
+              ),
+            BluetoothConnectionState.scanning => (
+                'Scanning for devices...',
+                AppColors.dataAccent,
+                Icons.bluetooth_searching,
+              ),
+            BluetoothConnectionState.error => (
+                _errorMessage ?? 'Connection error',
+                AppColors.critical,
+                Icons.bluetooth_disabled,
+              ),
+            BluetoothConnectionState.disconnected => (
+                'Not connected',
+                AppColors.textTertiary,
+                Icons.bluetooth,
+              ),
+          };
 
     return GlassCard(
       glowColor: statusColor,
@@ -435,6 +447,20 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
   Widget _buildHealthCard(AsyncValue<BluetoothConnectionState> btState) {
     final state = btState.value ?? BluetoothConnectionState.disconnected;
     final isConnected = state == BluetoothConnectionState.connected;
+    final sleepPhase = ref.watch(sleepPhaseProvider);
+    final isSleeping = !isConnected && sleepPhase != SleepReconnectPhase.none;
+    final btService = ref.watch(bluetoothServiceProvider);
+
+    final statusValue = isConnected
+        ? 'Connected'
+        : isSleeping
+            ? 'Sleep (${sleepPhase.name})'
+            : 'Disconnected';
+    final statusColor = isConnected
+        ? AppColors.success
+        : isSleeping
+            ? AppColors.warning
+            : AppColors.textTertiary;
 
     return GlassCard(
       child: Column(
@@ -451,8 +477,8 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
           const SizedBox(height: AppSpacing.md),
           _HealthRow(
             label: 'Status',
-            value: isConnected ? 'Connected' : 'Disconnected',
-            color: isConnected ? AppColors.success : AppColors.textTertiary,
+            value: statusValue,
+            color: statusColor,
           ),
           _HealthRow(
             label: 'Protocol',
@@ -465,10 +491,28 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
             color: AppColors.dataAccent,
           ),
           _HealthRow(
-            label: 'Reconnect Count',
-            value: '0',
+            label: 'Reconnect Attempts',
+            value: '${btService.reconnectAttempts}',
             color: AppColors.dataAccent,
           ),
+          if (isSleeping) ...[
+            const Divider(color: AppColors.surfaceBorder),
+            _HealthRow(
+              label: 'Sleep Phase',
+              value: switch (sleepPhase) {
+                SleepReconnectPhase.phaseA => 'A — Quick restart (30s)',
+                SleepReconnectPhase.phaseB => 'B — Quiet period',
+                SleepReconnectPhase.phaseC => 'C — Background (60s)',
+                SleepReconnectPhase.none => '--',
+              },
+              color: AppColors.warning,
+            ),
+            _HealthRow(
+              label: 'Auto-Reconnect',
+              value: 'Active',
+              color: AppColors.warning,
+            ),
+          ],
         ],
       ),
     );

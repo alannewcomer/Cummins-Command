@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../config/pid_config.dart';
+import '../../providers/bluetooth_provider.dart';
 import '../../providers/live_data_provider.dart';
+import '../../services/bluetooth_service.dart';
 import '../../services/diagnostic_service.dart';
 
 /// Live debug log viewer + raw OBD data stream.
@@ -28,7 +30,7 @@ class _DebugLogScreenState extends ConsumerState<DebugLogScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     // Load existing entries
     _entries.addAll(diag.entries);
     // Listen for new ones
@@ -127,6 +129,7 @@ class _DebugLogScreenState extends ConsumerState<DebugLogScreen>
             Tab(text: 'LOGS'),
             Tab(text: 'LIVE DATA'),
             Tab(text: 'PID STATUS'),
+            Tab(text: 'SLEEP TEST'),
           ],
         ),
       ),
@@ -136,6 +139,7 @@ class _DebugLogScreenState extends ConsumerState<DebugLogScreen>
           _buildLogView(),
           _buildLiveDataView(),
           _buildPidStatusView(),
+          _SleepTestTab(),
         ],
       ),
     );
@@ -705,6 +709,365 @@ class _LogEntryTile extends StatelessWidget {
       case DiagLevel.error:
         return AppColors.critical;
     }
+  }
+}
+
+// ─── Sleep Test Tab ───
+
+class _SleepTestTab extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final btService = ref.watch(bluetoothServiceProvider);
+    final isConnected = ref.watch(isBluetoothConnectedProvider);
+    final sleepPhase = ref.watch(sleepPhaseProvider);
+    final engineState = ref.watch(engineStateProvider);
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // ── Current State Summary ──
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.surfaceBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CURRENT STATE',
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _StateRow(
+                label: 'Bluetooth',
+                value: isConnected ? 'Connected' : 'Disconnected',
+                color: isConnected ? AppColors.success : AppColors.textTertiary,
+              ),
+              _StateRow(
+                label: 'Sleep Phase',
+                value: sleepPhase == SleepReconnectPhase.none
+                    ? 'None'
+                    : sleepPhase.name,
+                color: sleepPhase == SleepReconnectPhase.none
+                    ? AppColors.textTertiary
+                    : AppColors.warning,
+              ),
+              _StateRow(
+                label: 'Engine',
+                value: engineState.name,
+                color: engineState == EngineState.running
+                    ? AppColors.success
+                    : engineState == EngineState.accessory
+                        ? AppColors.warning
+                        : AppColors.textTertiary,
+              ),
+              _StateRow(
+                label: 'Saved Adapter',
+                value: btService.savedAddress ?? 'None',
+                color: AppColors.dataAccent,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── Test Actions ──
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.surfaceBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TEST ACTIONS',
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Simulate engine off (disconnect for sleep)
+              _TestButton(
+                label: 'Simulate Engine Off',
+                subtitle: 'Sends AT LP, disconnects BT, starts sleep reconnect phases',
+                icon: Icons.power_settings_new,
+                color: AppColors.critical,
+                enabled: isConnected,
+                onPressed: () {
+                  diag.info('TEST', 'Simulating engine off — disconnectForSleep()');
+                  btService.disconnectForSleep();
+                },
+              ),
+
+              const SizedBox(height: 8),
+
+              // Manual reconnect attempt
+              _TestButton(
+                label: 'Try Reconnect Now',
+                subtitle: 'Attempts immediate auto-connect to saved adapter',
+                icon: Icons.bluetooth_searching,
+                color: AppColors.dataAccent,
+                enabled: !isConnected && btService.savedAddress != null,
+                onPressed: () {
+                  diag.info('TEST', 'Manual reconnect attempt — tryAutoConnect()');
+                  btService.tryAutoConnect();
+                },
+              ),
+
+              const SizedBox(height: 8),
+
+              // Cancel sleep reconnect
+              _TestButton(
+                label: 'Cancel Sleep Reconnect',
+                subtitle: 'Stops all reconnect timers and clears sleep state',
+                icon: Icons.cancel_outlined,
+                color: AppColors.warning,
+                enabled: sleepPhase != SleepReconnectPhase.none,
+                onPressed: () {
+                  diag.info('TEST', 'Cancelling sleep reconnect — disconnect()');
+                  btService.disconnect();
+                },
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // ── Phase Explanation ──
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.surfaceBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SLEEP RECONNECT PHASES',
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _PhaseRow(
+                phase: 'A',
+                desc: '0-5 min: Try every 30s (catches quick restarts)',
+                active: sleepPhase == SleepReconnectPhase.phaseA,
+              ),
+              _PhaseRow(
+                phase: 'B',
+                desc: '5-35 min: Quiet period (MX+ BatterySaver powers down)',
+                active: sleepPhase == SleepReconnectPhase.phaseB,
+              ),
+              _PhaseRow(
+                phase: 'C',
+                desc: '35+ min: Try every 60s forever (instant-fail, zero drain)',
+                active: sleepPhase == SleepReconnectPhase.phaseC,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StateRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StateRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'JetBrains Mono',
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'JetBrains Mono',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TestButton extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _TestButton({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: GestureDetector(
+        onTap: enabled ? onPressed : null,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: color.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhaseRow extends StatelessWidget {
+  final String phase;
+  final String desc;
+  final bool active;
+
+  const _PhaseRow({
+    required this.phase,
+    required this.desc,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active
+                  ? AppColors.warning.withValues(alpha: 0.2)
+                  : AppColors.surfaceLight,
+              border: Border.all(
+                color: active
+                    ? AppColors.warning
+                    : AppColors.surfaceBorder,
+                width: active ? 2 : 1,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                phase,
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: active ? AppColors.warning : AppColors.textTertiary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              desc,
+              style: TextStyle(
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10,
+                color: active ? AppColors.warning : AppColors.textSecondary,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

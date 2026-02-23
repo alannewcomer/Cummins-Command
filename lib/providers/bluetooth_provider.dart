@@ -21,6 +21,18 @@ final isBluetoothConnectedProvider = Provider<bool>((ref) {
   return state.value == BluetoothConnectionState.connected;
 });
 
+/// Stream of sleep reconnect phase changes.
+final sleepPhaseStreamProvider = StreamProvider<SleepReconnectPhase>((ref) {
+  final service = ref.watch(bluetoothServiceProvider);
+  return service.sleepPhaseStream;
+});
+
+/// Current sleep reconnect phase snapshot.
+final sleepPhaseProvider = Provider<SleepReconnectPhase>((ref) {
+  return ref.watch(sleepPhaseStreamProvider).value ??
+      ref.watch(bluetoothServiceProvider).sleepPhase;
+});
+
 /// Discovered Bluetooth devices during scan.
 class BluetoothDeviceListNotifier extends Notifier<List<BluetoothDeviceInfo>> {
   StreamSubscription? _sub;
