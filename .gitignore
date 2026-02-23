@@ -48,7 +48,6 @@ claude-api.txt
 
 # Firebase Cloud Functions
 functions/node_modules/
-functions/lib/
 functions/.env
 functions/.env.local
 

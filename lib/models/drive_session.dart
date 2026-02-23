@@ -67,6 +67,7 @@ class DriveSession {
   // Timeseries storage
   final String? timeseriesPath;
   final bool timeseriesUploaded;
+  final String? parquetPath;
   final int datapointCount;
   final List<String> sensorList;
   final Map<String, Map<String, double>> parameterStats;
@@ -112,6 +113,7 @@ class DriveSession {
     this.tags = const [],
     this.timeseriesPath,
     this.timeseriesUploaded = false,
+    this.parquetPath,
     this.datapointCount = 0,
     this.sensorList = const [],
     this.parameterStats = const {},
@@ -169,6 +171,7 @@ class DriveSession {
     List<String>? tags,
     String? timeseriesPath,
     bool? timeseriesUploaded,
+    String? parquetPath,
     int? datapointCount,
     List<String>? sensorList,
     Map<String, Map<String, double>>? parameterStats,
@@ -214,6 +217,7 @@ class DriveSession {
       tags: tags ?? this.tags,
       timeseriesPath: timeseriesPath ?? this.timeseriesPath,
       timeseriesUploaded: timeseriesUploaded ?? this.timeseriesUploaded,
+      parquetPath: parquetPath ?? this.parquetPath,
       datapointCount: datapointCount ?? this.datapointCount,
       sensorList: sensorList ?? this.sensorList,
       parameterStats: parameterStats ?? this.parameterStats,
@@ -265,6 +269,7 @@ class DriveSession {
       'tags': tags,
       'timeseriesPath': timeseriesPath,
       'timeseriesUploaded': timeseriesUploaded,
+      'parquetPath': parquetPath,
       'datapointCount': datapointCount,
       'sensorList': sensorList,
       'parameterStats': parameterStats,
@@ -319,6 +324,7 @@ class DriveSession {
       tags: (d['tags'] as List<dynamic>?)?.cast<String>() ?? [],
       timeseriesPath: d['timeseriesPath'] as String?,
       timeseriesUploaded: d['timeseriesUploaded'] as bool? ?? false,
+      parquetPath: d['parquetPath'] as String?,
       datapointCount: (d['datapointCount'] as num?)?.toInt() ?? 0,
       sensorList: (d['sensorList'] as List<dynamic>?)?.cast<String>() ?? [],
       parameterStats: _parseParameterStats(d['parameterStats']),

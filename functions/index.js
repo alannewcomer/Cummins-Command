@@ -3,8 +3,9 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
-const { readTimeseries } = require('./lib/timeseries');
+const { readTimeseries, readTimeseriesColumns } = require('./lib/timeseries');
 const { callGeminiPro, callGeminiFlash } = require('./lib/gemini');
+const { convertToParquet } = require('./lib/parquet-converter');
 const { paths, USERS, VEHICLES, DRIVES, DATAPOINTS, MAINTENANCE, AI_JOBS, SHARING } = require('./lib/firestore-paths');
 const {
   buildDriveAnalysisPrompt,
@@ -555,6 +556,66 @@ exports.exportDriveData = onDocumentCreated(
         status: 'error',
         error: err.message,
         completedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+);
+
+// ──────────────────────────────────────────────────────────────
+// 9. driveToParquet — convert timeseries JSON to Parquet on GCS
+//    Triggered alongside analyzeDrive when timeseriesUploaded flips.
+//    Runs independently so a Parquet failure does not block AI analysis.
+// ──────────────────────────────────────────────────────────────
+exports.driveToParquet = onDocumentUpdated(
+  `${USERS}/{uid}/${VEHICLES}/{vid}/${DRIVES}/{did}`,
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!after) return;
+
+    // Only trigger when timeseriesUploaded flips to true
+    if (before.timeseriesUploaded || !after.timeseriesUploaded) return;
+    // Don't re-convert
+    if (after.parquetPath) return;
+
+    const { uid, vid, did } = event.params;
+    const driveRef = event.data.after.ref;
+    const timeseriesPath = after.timeseriesPath;
+
+    if (!timeseriesPath) {
+      console.warn(`driveToParquet: no timeseriesPath for drive ${did}`);
+      return;
+    }
+
+    try {
+      // Read column-oriented data directly (no row expansion — more efficient)
+      const { count, columns } = await readTimeseriesColumns(timeseriesPath);
+
+      if (count === 0) {
+        console.warn(`driveToParquet: empty timeseries for drive ${did}`);
+        return;
+      }
+
+      // Convert to Parquet and upload to GCS
+      const parquetPath = await convertToParquet({
+        count,
+        columns,
+        userId: uid,
+        vehicleId: vid,
+        driveId: did,
+      });
+
+      // Update drive doc with Parquet location
+      await driveRef.update({
+        parquetPath,
+        parquetConvertedAt: FieldValue.serverTimestamp(),
+      });
+
+      console.log(`driveToParquet: ${did} → ${parquetPath} (${count} rows)`);
+    } catch (err) {
+      console.error(`driveToParquet failed for ${did}:`, err);
+      await driveRef.update({
+        parquetError: err.message,
       });
     }
   }
