@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config/constants.dart';
 
 /// Severity levels for diagnostic log entries.
 enum DiagLevel { debug, info, warn, error }
@@ -59,6 +61,38 @@ class DiagnosticService {
   /// All buffered entries (newest last).
   List<DiagEntry> get entries => _entries.toList();
 
+  // ─── Cloud upload preference ───
+  bool _cloudUploadPreference = true;
+
+  /// Whether cloud upload is enabled by the user.
+  bool get cloudUploadEnabled => _cloudUploadPreference;
+
+  /// Load the persisted cloud upload preference (call before auth listener).
+  Future<void> loadCloudPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    _cloudUploadPreference =
+        prefs.getBool(AppConstants.devLogsCloudEnabledKey) ?? true;
+  }
+
+  /// Toggle cloud uploads on/off and persist the preference.
+  Future<void> setCloudUploadEnabled(bool enabled) async {
+    _cloudUploadPreference = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.devLogsCloudEnabledKey, enabled);
+
+    if (enabled && _userId != null) {
+      _firestoreEnabled = true;
+      _flushTimer?.cancel();
+      _flushTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _flush(),
+      );
+    } else if (!enabled) {
+      _firestoreEnabled = false;
+      _flushTimer?.cancel();
+    }
+  }
+
   // ─── Firestore batch upload ───
   String? _userId;
   Timer? _flushTimer;
@@ -66,8 +100,10 @@ class DiagnosticService {
   bool _firestoreEnabled = false;
 
   /// Call once after auth to enable Firestore uploads.
+  /// Respects the user's cloud upload preference.
   void enableFirestore(String userId) {
     _userId = userId;
+    if (!_cloudUploadPreference) return;
     _firestoreEnabled = true;
     _flushTimer?.cancel();
     _flushTimer = Timer.periodic(

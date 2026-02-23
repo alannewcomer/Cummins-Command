@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../providers/vehicle_provider.dart';
 import '../../widgets/common/glass_card.dart';
 
@@ -200,6 +201,17 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 Icon(Icons.chevron_right, color: AppColors.textTertiary),
               ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _SettingsTile(
+            icon: Icons.cloud_off,
+            title: 'Upload Dev Logs',
+            subtitle: 'Send debug logs to Firestore for remote debugging',
+            trailing: Switch(
+              value: ref.watch(devLogsCloudProvider),
+              onChanged: (val) =>
+                  ref.read(devLogsCloudProvider.notifier).toggle(val),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

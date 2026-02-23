@@ -65,8 +65,9 @@ class AppConstants {
   static const sleepReconnectPhaseBDuration = Duration(minutes: 30);
   static const sleepReconnectPhaseCInterval = Duration(seconds: 60);
 
-  // Saved adapter address key for SharedPreferences
+  // SharedPreferences keys
   static const savedAdapterAddressKey = 'last_obd_adapter_address';
+  static const devLogsCloudEnabledKey = 'dev_logs_cloud_enabled';
 
   // Firestore paths
   static const usersCollection = 'users';
