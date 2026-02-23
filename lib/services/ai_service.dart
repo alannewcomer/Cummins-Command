@@ -228,11 +228,39 @@ Be specific — reference actual values from the data. Keep each item concise.
       ]);
       final text = response.text?.trim() ?? '';
       final jsonStr = _extractJson(text);
-      final parsed = json.decode(jsonStr) as Map<String, dynamic>;
 
-      // Validate required fields
+      final dynamic decoded = json.decode(jsonStr);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Response is not a JSON object');
+      }
+      final parsed = decoded;
+
+      // Validate required fields and types
       if (!parsed.containsKey('healthScore') || !parsed.containsKey('summary')) {
         throw const FormatException('Missing required analysis fields');
+      }
+      if (parsed['healthScore'] is! num) {
+        throw const FormatException('healthScore must be a number');
+      }
+      if (parsed['summary'] is! String) {
+        throw const FormatException('summary must be a string');
+      }
+
+      // Clamp healthScore to valid range
+      final score = (parsed['healthScore'] as num).toInt().clamp(0, 100);
+      parsed['healthScore'] = score;
+
+      // Validate optional list fields are actually lists
+      for (final key in ['anomalies', 'recommendations']) {
+        if (parsed.containsKey(key) && parsed[key] is! List) {
+          parsed[key] = <String>[];
+        }
+      }
+
+      // Validate highlights is a map if present
+      if (parsed.containsKey('highlights') &&
+          parsed['highlights'] is! Map) {
+        parsed['highlights'] = <String, dynamic>{};
       }
 
       return parsed;
@@ -288,11 +316,22 @@ Use 3 columns, up to 4 rows. Prioritize the most relevant parameters.
 
       // Parse JSON from response, handling potential markdown fences
       final jsonStr = _extractJson(text);
-      final parsed = json.decode(jsonStr) as Map<String, dynamic>;
 
-      // Validate required fields exist
+      final dynamic decoded = json.decode(jsonStr);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Response is not a JSON object');
+      }
+      final parsed = decoded;
+
+      // Validate required fields and types
       if (!parsed.containsKey('layout') || !parsed.containsKey('name')) {
         throw const FormatException('Missing required dashboard fields');
+      }
+      if (parsed['name'] is! String) {
+        throw const FormatException('name must be a string');
+      }
+      if (parsed['layout'] is! Map) {
+        throw const FormatException('layout must be an object');
       }
 
       return parsed;

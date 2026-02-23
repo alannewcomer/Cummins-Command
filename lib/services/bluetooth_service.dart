@@ -475,6 +475,19 @@ class BluetoothService {
       }
     }
 
+    // Validate command: ASCII printable only, no control chars, reasonable length
+    if (command.isEmpty || command.length > 128) {
+      throw ArgumentError('Command must be 1-128 characters');
+    }
+    for (int i = 0; i < command.length; i++) {
+      final c = command.codeUnitAt(i);
+      if (c < 0x20 || c > 0x7E) {
+        throw ArgumentError(
+          'Command contains invalid character at position $i (0x${c.toRadixString(16)})',
+        );
+      }
+    }
+
     _responseBuffer.clear();
     _pendingResponse = Completer<String>();
 

@@ -245,6 +245,14 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
+/// Validate and return a NetworkImage only for HTTPS URLs.
+ImageProvider? _safePhotoUrl(String? url) {
+  if (url == null || url.isEmpty) return null;
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'https') return null;
+  return NetworkImage(url);
+}
+
 class _AccountTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -259,9 +267,7 @@ class _AccountTile extends ConsumerWidget {
           CircleAvatar(
             radius: 22,
             backgroundColor: AppColors.primaryDim,
-            backgroundImage: user?.photoURL != null
-                ? NetworkImage(user!.photoURL!)
-                : null,
+            backgroundImage: _safePhotoUrl(user?.photoURL),
             child: user?.photoURL == null
                 ? const Icon(Icons.person, color: AppColors.primary, size: 22)
                 : null,
