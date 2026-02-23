@@ -47,6 +47,9 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
+  // Load dev-logs cloud upload preference before auth listener
+  await diag.loadCloudPreference();
+
   // Enable diagnostic logging to Firestore when user is authenticated
   FirebaseAuth.instance.authStateChanges().listen((user) {
     if (user != null) {
