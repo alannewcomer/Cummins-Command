@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/vehicle_provider.dart';
+import '../../services/diagnostic_service.dart';
 import '../../widgets/common/glass_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -179,6 +180,8 @@ class SettingsScreen extends ConsumerWidget {
 
           // ── Developer ──
           const SectionHeader(title: 'Developer', padding: EdgeInsets.zero),
+          const SizedBox(height: AppSpacing.sm),
+          const _DevLogsCloudToggle(),
           const SizedBox(height: AppSpacing.sm),
           GlassCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -455,6 +458,35 @@ class _AddVehicleCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Text('Add Vehicle', style: AppTypography.labelLarge.copyWith(color: AppColors.textSecondary)),
         ],
+      ),
+    );
+  }
+}
+
+class _DevLogsCloudToggle extends StatefulWidget {
+  const _DevLogsCloudToggle();
+
+  @override
+  State<_DevLogsCloudToggle> createState() => _DevLogsCloudToggleState();
+}
+
+class _DevLogsCloudToggleState extends State<_DevLogsCloudToggle> {
+  bool _enabled = diag.cloudUploadEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsTile(
+      icon: Icons.cloud_upload_outlined,
+      title: 'Dev Logs to Cloud',
+      subtitle: _enabled
+          ? 'Uploading debug logs to Firestore'
+          : 'Logs kept on-device only',
+      trailing: Switch(
+        value: _enabled,
+        onChanged: (value) async {
+          await diag.setCloudUploadEnabled(value);
+          setState(() => _enabled = value);
+        },
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:myapp/config/constants.dart';
 
 /// Severity levels for diagnostic log entries.
 enum DiagLevel { debug, info, warn, error }
@@ -64,6 +66,27 @@ class DiagnosticService {
   Timer? _flushTimer;
   final _pending = <DiagEntry>[];
   bool _firestoreEnabled = false;
+  bool _cloudUploadEnabled = true;
+
+  /// Whether dev logs are uploaded to Firestore.
+  bool get cloudUploadEnabled => _cloudUploadEnabled;
+
+  /// Load the cloud-upload preference from SharedPreferences.
+  Future<void> loadCloudUploadPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    _cloudUploadEnabled =
+        prefs.getBool(AppConstants.devLogsCloudUploadKey) ?? true;
+  }
+
+  /// Toggle cloud upload on/off and persist the choice.
+  Future<void> setCloudUploadEnabled(bool enabled) async {
+    _cloudUploadEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.devLogsCloudUploadKey, enabled);
+    if (!enabled) {
+      _pending.clear();
+    }
+  }
 
   /// Call once after auth to enable Firestore uploads.
   void enableFirestore(String userId) {
@@ -104,7 +127,7 @@ class DiagnosticService {
     if (!_controller.isClosed) {
       _controller.add(entry);
     }
-    if (_firestoreEnabled) {
+    if (_firestoreEnabled && _cloudUploadEnabled) {
       _pending.add(entry);
     }
   }
