@@ -614,31 +614,40 @@ class ObdService {
     }
   }
 
-  /// Reduced polling for accessory mode — only RPM and voltage.
+  /// Reduced polling for accessory mode — voltage only (no CAN traffic).
   ///
-  /// Keeps the BT connection alive so we can detect engine restart,
-  /// while minimizing commands to let the OBDLink MX+ BatterySaver
-  /// timer count down toward sleep.
+  /// Uses AT RV (adapter pin 16 voltage) which reads the OBD port voltage
+  /// directly from the adapter's hardware — no CAN bus traffic at all.
+  /// This lets the truck's ECU and CAN modules sleep immediately while
+  /// still detecting engine restart via voltage jump.
+  ///
+  /// When voltage jumps above alternatorChargingVoltage (13.5V), the
+  /// alternator has started — confirm with a single RPM query on CAN.
   Future<void> _pollAccessoryMode() async {
-    // Poll RPM via OBD2 (PID 0x0C) — fastest way to detect engine start
-    final rpmPid = PidRegistry.get('rpm');
-    bool rpmGotResponse = false;
-    if (rpmPid != null) {
-      final successBefore = _pidStatus[rpmPid.id]?.successCount ?? 0;
-      await requestPid(rpmPid);
-      final successAfter = _pidStatus[rpmPid.id]?.successCount ?? 0;
-      rpmGotResponse = successAfter > successBefore;
-    }
-
-    // Read voltage via AT RV (adapter pin 16 voltage)
+    // Read voltage via AT RV (adapter pin 16 — zero CAN traffic)
     final voltageBefore = _lastVoltageReading;
     await _readAdapterVoltage();
     final voltageGotResponse = _lastVoltageReading != null &&
         _lastVoltageReading != voltageBefore;
 
-    // Track command timeout state — if ALL commands timeout, ECU is
-    // unresponsive (key fully off, not just engine off).
-    if (!rpmGotResponse && !voltageGotResponse) {
+    // Detect engine restart: voltage jump above alternator threshold
+    // means the alternator is charging — engine has restarted.
+    bool rpmGotResponse = false;
+    if (_lastVoltageReading != null &&
+        _lastVoltageReading! > AppConstants.alternatorChargingVoltage) {
+      // Voltage says alternator is running — confirm with RPM on CAN
+      final rpmPid = PidRegistry.get('rpm');
+      if (rpmPid != null) {
+        final successBefore = _pidStatus[rpmPid.id]?.successCount ?? 0;
+        await requestPid(rpmPid);
+        final successAfter = _pidStatus[rpmPid.id]?.successCount ?? 0;
+        rpmGotResponse = successAfter > successBefore;
+      }
+    }
+
+    // Track command timeout state — if AT RV times out consistently,
+    // the adapter is unresponsive (fully off or BT link broken).
+    if (!voltageGotResponse && !rpmGotResponse) {
       _accessoryTimeoutSince ??= DateTime.now();
     } else {
       _accessoryTimeoutSince = null;
