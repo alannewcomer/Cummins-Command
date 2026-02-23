@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 const _notificationChannelId = 'cummins_command_obd';
 const _notificationId = 888;
@@ -15,6 +16,11 @@ const _notificationId = 888;
 ///
 /// The background isolate itself does minimal work — it just stays alive
 /// and updates the notification. All BT/OBD logic runs in the main isolate.
+///
+/// autoStartOnBoot: true — after a phone reboot, the foreground service
+/// restarts automatically. When the user opens the app, the main isolate
+/// resumes and tryAutoConnect() fires, connecting to the MX+ if the truck
+/// is running.
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
 
@@ -22,7 +28,7 @@ Future<void> initializeBackgroundService() async {
     androidConfiguration: AndroidConfiguration(
       onStart: _onStart,
       autoStart: false, // Started explicitly when we have an adapter to connect to
-      autoStartOnBoot: false,
+      autoStartOnBoot: true, // Restart after phone reboot so reconnect timers survive
       isForegroundMode: true,
       notificationChannelId: _notificationChannelId,
       initialNotificationTitle: 'Cummins Command',
@@ -35,6 +41,23 @@ Future<void> initializeBackgroundService() async {
       onForeground: _onStart,
     ),
   );
+}
+
+/// Request Android battery optimization exemption.
+///
+/// When granted, Android will not kill our foreground service under normal
+/// memory pressure. This is the single most impactful change for "never
+/// miss a trip" reliability — without it, Android may kill the service
+/// after 30+ minutes in background, breaking Phase C reconnect.
+///
+/// Returns true if already granted or user just granted it.
+/// Returns false if user denied or the request failed.
+Future<bool> requestBatteryOptimizationExemption() async {
+  final status = await Permission.ignoreBatteryOptimizations.status;
+  if (status.isGranted) return true;
+
+  final result = await Permission.ignoreBatteryOptimizations.request();
+  return result.isGranted;
 }
 
 /// Entry point for the background isolate.

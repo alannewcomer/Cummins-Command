@@ -151,6 +151,16 @@ final obdLifecycleProvider = Provider<void>((ref) {
       startBackgroundService();
       updateBackgroundNotification('Connected — monitoring');
 
+      // Request battery optimization exemption on first connect.
+      // This is the single most impactful change for trip reliability —
+      // without it, Android kills the foreground service after ~30 min
+      // in background, breaking the Phase C reconnect that catches the
+      // next engine start (whether that's 5 min or 5 hours later).
+      requestBatteryOptimizationExemption().then((granted) {
+        diag.info('LIFE', 'Battery optimization exemption',
+            granted ? 'granted' : 'denied');
+      });
+
       // Skip if OBD is already initializing or polling (initial connect
       // is handled by BluetoothSetupScreen — this is for reconnects only)
       if (obdService.isPolling || obdService.initState == ObdInitState.initializing) {
