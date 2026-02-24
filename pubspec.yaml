@@ -23,6 +23,7 @@ dependencies:
   firebase_remote_config:
   firebase_ai:
   firebase_app_check:
+  firebase_crashlytics:
 
   # Navigation
   go_router:
@@ -49,7 +50,10 @@ dependencies:
   latlong2: ^0.9.0
 
   # Bluetooth Classic (OBDLink MX+)
-  flutter_bluetooth_classic_serial: ^1.3.2
+  # Using local patched copy — upstream has unsafe Map<Object?,Object?> cast
+  # that crashes on startup (Crashlytics issue 34b27628)
+  flutter_bluetooth_classic_serial:
+    path: packages/flutter_bluetooth_classic_serial
 
   # GPS (device location for drive route maps)
   geolocator: ^13.0.2

@@ -16,6 +16,11 @@
 # Bluetooth Classic Serial
 -keep class com.example.flutter_bluetooth_classic.** { *; }
 
+# Background Service — R8 must not strip notification or service classes
+-keep class id.flutter.flutter_background_service.** { *; }
+-keep class androidx.core.app.NotificationCompat** { *; }
+-keep class android.app.Notification** { *; }
+
 # Google Play Core (referenced by Flutter deferred components)
 -dontwarn com.google.android.play.core.splitcompat.**
 -dontwarn com.google.android.play.core.splitinstall.**

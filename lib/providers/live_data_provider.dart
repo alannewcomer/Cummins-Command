@@ -125,6 +125,8 @@ final obdLifecycleProvider = Provider<void>((ref) {
       if (success) {
         diag.info('LIFE', 'Auto-connected to saved adapter on init');
       }
+    }).catchError((Object e) {
+      diag.error('LIFE', 'Auto-connect failed on init', '$e');
     });
   }
 
@@ -138,6 +140,8 @@ final obdLifecycleProvider = Provider<void>((ref) {
           if (success) {
             diag.info('LIFE', 'Auto-connected to saved adapter on resume');
           }
+        }).catchError((Object e) {
+          diag.error('LIFE', 'Auto-connect failed on resume', '$e');
         });
       }
     },
@@ -148,7 +152,11 @@ final obdLifecycleProvider = Provider<void>((ref) {
     if (state == BluetoothConnectionState.connected) {
       // Start foreground service on first connect (keeps process alive for
       // background reconnect when the app is minimized)
-      startBackgroundService();
+      try {
+        await startBackgroundService();
+      } catch (e) {
+        diag.error('LIFE', 'Background service start failed (non-fatal)', '$e');
+      }
       updateBackgroundNotification('Connected — monitoring');
 
       // Request battery optimization exemption on first connect.
@@ -156,10 +164,13 @@ final obdLifecycleProvider = Provider<void>((ref) {
       // without it, Android kills the foreground service after ~30 min
       // in background, breaking the Phase C reconnect that catches the
       // next engine start (whether that's 5 min or 5 hours later).
-      requestBatteryOptimizationExemption().then((granted) {
+      try {
+        final granted = await requestBatteryOptimizationExemption();
         diag.info('LIFE', 'Battery optimization exemption',
             granted ? 'granted' : 'denied');
-      });
+      } catch (e) {
+        diag.error('LIFE', 'Battery optimization request failed', '$e');
+      }
 
       // Skip if OBD is already initializing or polling (initial connect
       // is handled by BluetoothSetupScreen — this is for reconnects only)
@@ -171,7 +182,11 @@ final obdLifecycleProvider = Provider<void>((ref) {
       final ok = await obdService.initialize();
       if (ok) {
         obdService.startPolling();
-        _autoStartRecording(ref, recorder);
+        try {
+          await _autoStartRecording(ref, recorder);
+        } catch (e) {
+          diag.error('LIFE', 'Auto-start recording failed', '$e');
+        }
       }
     } else if (state == BluetoothConnectionState.disconnected) {
       updateBackgroundNotification('Waiting for adapter...');
@@ -213,7 +228,11 @@ final obdLifecycleProvider = Provider<void>((ref) {
       case EngineState.running:
         updateBackgroundNotification('Connected — engine running');
         // Engine confirmed running — auto-start recording if not already
-        _autoStartRecording(ref, recorder);
+        try {
+          await _autoStartRecording(ref, recorder);
+        } catch (e) {
+          diag.error('LIFE', 'Auto-start recording failed (engine running)', '$e');
+        }
         break;
       case EngineState.unknown:
         // No action needed — normal polling continues

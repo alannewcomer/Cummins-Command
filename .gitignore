@@ -60,6 +60,9 @@ ui-debug.log
 # Flutter plugins cache
 .flutter-plugins
 
+# Android build caches
+android/.kotlin/
+
 # Android local files
 android/local.properties
 android/key.properties

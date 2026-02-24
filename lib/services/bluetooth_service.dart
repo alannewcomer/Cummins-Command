@@ -78,17 +78,31 @@ class RealBluetoothAdapter implements BluetoothAdapter {
 
   RealBluetoothAdapter() {
     // Listen for connection state changes to detect disconnects
-    _connectionSubscription = _bt.onConnectionChanged.listen((state) {
-      _connected = state.isConnected;
-    });
+    _connectionSubscription = _bt.onConnectionChanged.listen(
+      (state) {
+        _connected = state.isConnected;
+      },
+      onError: (Object error) {
+        diag.error('BT-ADAPT', 'onConnectionChanged stream error', '$error');
+        _connected = false;
+      },
+    );
 
     // Pipe incoming data into our broadcast stream
-    _dataSubscription = _bt.onDataReceived.listen((btData) {
-      final bytes = Uint8List.fromList(btData.data);
-      if (!_inputController.isClosed) {
-        _inputController.add(bytes);
-      }
-    });
+    _dataSubscription = _bt.onDataReceived.listen(
+      (btData) {
+        final bytes = Uint8List.fromList(btData.data);
+        if (!_inputController.isClosed) {
+          _inputController.add(bytes);
+        }
+      },
+      onError: (Object error) {
+        diag.error('BT-ADAPT', 'onDataReceived stream error', '$error');
+        if (!_inputController.isClosed) {
+          _inputController.addError(error);
+        }
+      },
+    );
   }
 
   @override
@@ -162,7 +176,15 @@ class RealBluetoothAdapter implements BluetoothAdapter {
       // The actual RFCOMM socket takes 2-10+ seconds to open.
       // The onConnectionChanged listener (in constructor) sets _connected
       // to true when the socket is really ready.
-      await _bt.connect(address);
+      try {
+        await _bt.connect(address);
+      } catch (e) {
+        // Platform channel can throw SecurityException on Android 12+ if
+        // BLUETOOTH_CONNECT is not granted, or other native errors.
+        diag.error('RFCOMM', 'Native connect() threw', '$e');
+        _connected = false;
+        return false;
+      }
       diag.info('RFCOMM', 'connect() returned, waiting for socket...');
 
       // Poll _connected (set by onConnectionChanged stream in constructor)
@@ -196,7 +218,13 @@ class RealBluetoothAdapter implements BluetoothAdapter {
   @override
   Future<void> sendBytes(Uint8List data) async {
     if (!_connected) throw StateError('Not connected');
-    await _bt.sendData(data);
+    try {
+      await _bt.sendData(data);
+    } catch (e) {
+      diag.error('BT-ADAPT', 'sendData native error', '$e');
+      _connected = false;
+      rethrow;
+    }
   }
 
   @override

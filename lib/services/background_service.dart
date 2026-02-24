@@ -28,7 +28,7 @@ Future<void> initializeBackgroundService() async {
     androidConfiguration: AndroidConfiguration(
       onStart: _onStart,
       autoStart: false, // Started explicitly when we have an adapter to connect to
-      autoStartOnBoot: true, // Restart after phone reboot so reconnect timers survive
+      autoStartOnBoot: false, // Disabled — boot start crashes before Flutter creates notif channel
       isForegroundMode: true,
       notificationChannelId: _notificationChannelId,
       initialNotificationTitle: 'Cummins Command',
@@ -86,7 +86,17 @@ void _onStart(ServiceInstance service) async {
 }
 
 /// Helper to start the foreground service from the main isolate.
+///
+/// On Android 13+ (API 33), requests POST_NOTIFICATIONS permission first.
+/// Without it, startForeground() throws CannotPostForegroundServiceNotificationException.
 Future<void> startBackgroundService() async {
+  // Android 13+ requires notification permission for foreground services
+  final notifStatus = await Permission.notification.status;
+  if (!notifStatus.isGranted) {
+    final result = await Permission.notification.request();
+    if (!result.isGranted) return; // Can't run foreground service without it
+  }
+
   final service = FlutterBackgroundService();
   final running = await service.isRunning();
   if (!running) {

@@ -126,7 +126,7 @@ class TimeseriesWriter {
         col.add(value);
       } else if (value != null) {
         // First non-null value for this column — backfill with nulls
-        _columns[field] = List<double?>.filled(_timestamps.length - 1, null)
+        _columns[field] = List<double?>.filled(_timestamps.length - 1, null, growable: true)
           ..add(value);
       }
     }
