@@ -382,7 +382,6 @@ String formatGaugeValue(double val) {
   if (val.abs() >= 10000) return '${(val / 1000).toStringAsFixed(0)}k';
   if (val.abs() >= 1000) return val.toStringAsFixed(0);
   if (val.abs() >= 100) return val.toStringAsFixed(0);
-  if (val.abs() >= 10) return val.toStringAsFixed(1);
   return val.toStringAsFixed(1);
 }
 

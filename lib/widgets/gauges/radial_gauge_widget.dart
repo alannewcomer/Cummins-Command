@@ -13,10 +13,7 @@ class RadialGaugeWidget extends StatefulWidget {
   final double value;
   final double? minOverride;
   final double? maxOverride;
-  final double? warnThreshold;
-  final double? critThreshold;
   final bool showLabel;
-  final bool showMinMax;
   final bool compact;
   final VoidCallback? onTap;
 
@@ -26,10 +23,7 @@ class RadialGaugeWidget extends StatefulWidget {
     required this.value,
     this.minOverride,
     this.maxOverride,
-    this.warnThreshold,
-    this.critThreshold,
     this.showLabel = true,
-    this.showMinMax = false,
     this.compact = false,
     this.onTap,
   });

@@ -7,14 +7,12 @@ class AiChatBubble extends StatelessWidget {
   final String message;
   final bool isUser;
   final bool isLoading;
-  final DateTime? timestamp;
 
   const AiChatBubble({
     super.key,
     required this.message,
     required this.isUser,
     this.isLoading = false,
-    this.timestamp,
   });
 
   @override

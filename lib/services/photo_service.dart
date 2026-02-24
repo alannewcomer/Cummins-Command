@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:myapp/config/constants.dart';
 import 'package:uuid/uuid.dart';
 
 class PhotoService {
@@ -55,11 +56,11 @@ class PhotoService {
     String photoUrl,
   ) async {
     await FirebaseFirestore.instance
-        .collection('users')
+        .collection(AppConstants.usersCollection)
         .doc(userId)
-        .collection('vehicles')
+        .collection(AppConstants.vehiclesSubcollection)
         .doc(vehicleId)
-        .collection('drives')
+        .collection(AppConstants.drivesSubcollection)
         .doc(driveId)
         .update({
       'photoUrls': FieldValue.arrayUnion([photoUrl]),
@@ -74,11 +75,11 @@ class PhotoService {
     String photoUrl,
   ) async {
     await FirebaseFirestore.instance
-        .collection('users')
+        .collection(AppConstants.usersCollection)
         .doc(userId)
-        .collection('vehicles')
+        .collection(AppConstants.vehiclesSubcollection)
         .doc(vehicleId)
-        .collection('drives')
+        .collection(AppConstants.drivesSubcollection)
         .doc(driveId)
         .update({
       'photoUrls': FieldValue.arrayRemove([photoUrl]),
