@@ -26,7 +26,10 @@ class BluetoothDeviceListNotifier extends Notifier<List<BluetoothDeviceInfo>> {
   StreamSubscription? _sub;
 
   @override
-  List<BluetoothDeviceInfo> build() => [];
+  List<BluetoothDeviceInfo> build() {
+    ref.onDispose(() => _sub?.cancel());
+    return [];
+  }
 
   Future<void> startScan() async {
     state = [];

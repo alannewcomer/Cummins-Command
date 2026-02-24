@@ -12,7 +12,7 @@ import 'drives_provider.dart';
 import 'location_provider.dart';
 import 'vehicle_provider.dart';
 
-export '../services/obd_service.dart' show PidStatus, EngineState;
+export '../services/obd_service.dart' show PidStatus, EngineState, ObdInitState;
 
 /// Live OBD data stream — the core real-time data provider.
 final obdServiceProvider = Provider<ObdService>((ref) {
