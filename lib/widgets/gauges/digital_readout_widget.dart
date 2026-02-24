@@ -91,7 +91,6 @@ class _DigitalReadoutWidgetState extends State<DigitalReadoutWidget>
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (widget.showLabel)
                       Text(

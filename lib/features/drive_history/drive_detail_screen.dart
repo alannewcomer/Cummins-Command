@@ -223,6 +223,19 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
             ),
           ),
 
+          // ─── View All Stats button ───
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: _ViewAllStatsButton(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/drives/${widget.driveId}/stats');
+                },
+              ),
+            ),
+          ),
+
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
           // ─── 3b. Notes & Cargo ───
@@ -1066,6 +1079,60 @@ class _TagsSection extends ConsumerWidget {
         .update({
       'tags': FieldValue.arrayUnion([tag]),
     });
+  }
+}
+
+// ─── View All Stats Button ───
+
+class _ViewAllStatsButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ViewAllStatsButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.primary.withValues(alpha: 0.12),
+              AppColors.primary.withValues(alpha: 0.06),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.large),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.table_chart_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'View All Stats',
+              style: AppTypography.button.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Icon(
+              Icons.arrow_forward,
+              color: AppColors.primary.withValues(alpha: 0.6),
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

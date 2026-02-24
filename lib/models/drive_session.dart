@@ -361,24 +361,33 @@ class DriveSession {
         orElse: () => DriveStatus.recording,
       ),
       aiSummary: d['aiSummary'] as String?,
-      aiAnomalies: (d['aiAnomalies'] as List<dynamic>?)?.cast<String>() ?? [],
+      aiAnomalies: _parseStringList(d['aiAnomalies']),
       aiHealthScore: (d['aiHealthScore'] as num?)?.toInt(),
-      aiRecommendations: (d['aiRecommendations'] as List<dynamic>?)?.cast<String>() ?? [],
-      tags: (d['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+      aiRecommendations: _parseStringList(d['aiRecommendations']),
+      tags: _parseStringList(d['tags']),
       notes: d['notes'] as String?,
       cargoDescription: d['cargoDescription'] as String?,
       cargoWeightLbs: (d['cargoWeightLbs'] as num?)?.toDouble(),
       routeId: d['routeId'] as String?,
       routeName: d['routeName'] as String?,
-      autoTags: (d['autoTags'] as List<dynamic>?)?.cast<String>() ?? [],
-      photoUrls: (d['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [],
+      autoTags: _parseStringList(d['autoTags']),
+      photoUrls: _parseStringList(d['photoUrls']),
       timeseriesPath: d['timeseriesPath'] as String?,
       timeseriesUploaded: d['timeseriesUploaded'] as bool? ?? false,
       parquetPath: d['parquetPath'] as String?,
       datapointCount: (d['datapointCount'] as num?)?.toInt() ?? 0,
-      sensorList: (d['sensorList'] as List<dynamic>?)?.cast<String>() ?? [],
+      sensorList: _parseStringList(d['sensorList']),
       parameterStats: _parseParameterStats(d['parameterStats']),
     );
+  }
+
+  /// Safely parse a Firestore field that should be a string list.
+  /// Returns [] if the value is null, not a List, or contains non-String items.
+  static List<String> _parseStringList(dynamic raw) {
+    if (raw is List) {
+      return raw.whereType<String>().toList();
+    }
+    return [];
   }
 
   static Map<String, Map<String, double>> _parseParameterStats(dynamic raw) {

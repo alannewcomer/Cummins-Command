@@ -56,8 +56,8 @@ class DashboardTemplates {
           _w('radialGauge', 'coolantTemp'),
           _w('radialGauge', 'engineLoadObd2'),
         ]),
-        // Row 2 (80px): speed + EGT
-        _row(80, [
+        // Row 2 (120px): speed + EGT
+        _row(120, [
           _w('digital', 'speed'),
           _w('digital', 'egtObd2'),
         ]),
@@ -65,8 +65,8 @@ class DashboardTemplates {
         _row(50, [
           _w('linearBar', 'accelPedalD', colSpan: 2),
         ]),
-        // Row 4 (80px): rail pressure + DPF temp
-        _row(80, [
+        // Row 4 (120px): rail pressure + DPF temp
+        _row(120, [
           _w('digital', 'railPressure'),
           _w('digital', 'dpfTemp'),
         ]),
@@ -119,13 +119,13 @@ class DashboardTemplates {
         _row(50, [
           _w('linearBar', 'accelPedalD', colSpan: 2),
         ]),
-        // Row 3 (80px): RPM + speed
-        _row(80, [
+        // Row 3 (120px): RPM + speed
+        _row(120, [
           _w('digital', 'rpm'),
           _w('digital', 'speed'),
         ]),
-        // Row 4 (80px): DPF temp + rail pressure
-        _row(80, [
+        // Row 4 (120px): DPF temp + rail pressure
+        _row(120, [
           _w('digital', 'dpfTemp'),
           _w('digital', 'railPressure'),
         ]),
@@ -170,18 +170,18 @@ class DashboardTemplates {
           _w('radialGauge', 'rpm'),
           _w('radialGauge', 'engineLoadObd2'),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'speed'),
           _w('digital', 'actualTorque'),
         ]),
         _row(50, [
           _w('linearBar', 'accelPedalD', colSpan: 2),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'demandTorque'),
           _w('digital', 'commandedThrottle'),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'maf'),
           _w('digital', 'railPressure'),
         ]),
@@ -196,7 +196,7 @@ class DashboardTemplates {
           _w('linearBar', 'vgtControlObd'),
           _w('linearBar', 'commandedEgr'),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'turboInletPressure'),
           _w('digital', 'exhaustBackpressure'),
         ]),
@@ -207,11 +207,11 @@ class DashboardTemplates {
           _w('radialGauge', 'coolantTemp'),
           _w('radialGauge', 'dpfTemp'),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'intakeTemp'),
           _w('digital', 'chargeAirTemp'),
         ]),
-        _row(80, [
+        _row(120, [
           _w('digital', 'intercoolerOutletTemp'),
           _w('digital', 'turboInletTemp'),
         ]),
