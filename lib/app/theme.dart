@@ -50,70 +50,70 @@ class AppTypography {
   AppTypography._();
 
   // Display / Hero — Orbitron
-  static TextStyle displayLarge = GoogleFonts.orbitron(
+  static final TextStyle displayLarge = GoogleFonts.orbitron(
     fontSize: 32,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     letterSpacing: 1.2,
   );
 
-  static TextStyle displayMedium = GoogleFonts.orbitron(
+  static final TextStyle displayMedium = GoogleFonts.orbitron(
     fontSize: 24,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
     letterSpacing: 0.8,
   );
 
-  static TextStyle displaySmall = GoogleFonts.orbitron(
+  static final TextStyle displaySmall = GoogleFonts.orbitron(
     fontSize: 18,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
   // Data values — Orbitron (monospaced feel)
-  static TextStyle dataHuge = GoogleFonts.orbitron(
+  static final TextStyle dataHuge = GoogleFonts.orbitron(
     fontSize: 48,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     letterSpacing: 2.0,
   );
 
-  static TextStyle dataLarge = GoogleFonts.orbitron(
+  static final TextStyle dataLarge = GoogleFonts.orbitron(
     fontSize: 28,
     fontWeight: FontWeight.w700,
     color: AppColors.textPrimary,
     letterSpacing: 1.5,
   );
 
-  static TextStyle dataMedium = GoogleFonts.orbitron(
+  static final TextStyle dataMedium = GoogleFonts.orbitron(
     fontSize: 20,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
     letterSpacing: 1.0,
   );
 
-  static TextStyle dataSmall = GoogleFonts.orbitron(
+  static final TextStyle dataSmall = GoogleFonts.orbitron(
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: AppColors.textPrimary,
   );
 
   // Technical labels — JetBrains Mono
-  static TextStyle labelLarge = GoogleFonts.jetBrainsMono(
+  static final TextStyle labelLarge = GoogleFonts.jetBrainsMono(
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: AppColors.textSecondary,
     letterSpacing: 0.5,
   );
 
-  static TextStyle labelMedium = GoogleFonts.jetBrainsMono(
+  static final TextStyle labelMedium = GoogleFonts.jetBrainsMono(
     fontSize: 12,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
     letterSpacing: 0.3,
   );
 
-  static TextStyle labelSmall = GoogleFonts.jetBrainsMono(
+  static final TextStyle labelSmall = GoogleFonts.jetBrainsMono(
     fontSize: 10,
     fontWeight: FontWeight.w400,
     color: AppColors.textTertiary,
@@ -121,21 +121,21 @@ class AppTypography {
   );
 
   // Body / descriptions — Inter
-  static TextStyle bodyLarge = GoogleFonts.inter(
+  static final TextStyle bodyLarge = GoogleFonts.inter(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
     height: 1.5,
   );
 
-  static TextStyle bodyMedium = GoogleFonts.inter(
+  static final TextStyle bodyMedium = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textSecondary,
     height: 1.4,
   );
 
-  static TextStyle bodySmall = GoogleFonts.inter(
+  static final TextStyle bodySmall = GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w400,
     color: AppColors.textTertiary,
@@ -143,7 +143,7 @@ class AppTypography {
   );
 
   // AI text — Inter with special styling
-  static TextStyle aiText = GoogleFonts.inter(
+  static final TextStyle aiText = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: AppColors.textPrimary,
@@ -152,7 +152,7 @@ class AppTypography {
   );
 
   // Button text
-  static TextStyle button = GoogleFonts.inter(
+  static final TextStyle button = GoogleFonts.inter(
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,

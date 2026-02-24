@@ -44,7 +44,7 @@ void main() async {
       return true;
     };
 
-    // Lock orientation to portrait (primary) for dashboard readability
+    // Allow portrait and landscape orientations (exclude upside-down portrait)
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.landscapeLeft,

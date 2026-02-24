@@ -226,7 +226,7 @@ DriveStats computeDriveStats(List<DataPoint> points) {
 
     // RPM
     if (dp.rpm != null) {
-      acc.addRpm(dp.rpm!, dtSec);
+      acc.addRpm(dp.rpm!);
       rawRpm.add(_RawPt(tNorm, dp.rpm!));
     }
 
@@ -545,7 +545,7 @@ class _Accumulators {
   int rpmCount = 0;
   double maxRpm = 0;
 
-  void addRpm(double v, double dtSec) {
+  void addRpm(double v) {
     rpmSum += v;
     rpmCount++;
     if (v > maxRpm) maxRpm = v;

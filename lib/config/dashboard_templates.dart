@@ -230,12 +230,4 @@ class DashboardTemplates {
       ],
     },
   };
-
-  static Map<String, dynamic>? getByName(String name) {
-    try {
-      return all.firstWhere((t) => t['name'] == name);
-    } catch (_) {
-      return null;
-    }
-  }
 }

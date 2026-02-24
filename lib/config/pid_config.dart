@@ -372,9 +372,6 @@ class PidRegistry {
   static List<PidDefinition> getByTier(PollTier tier) =>
       _pids.values.where((p) => p.tier == tier).toList();
 
-  static List<PidDefinition> get critical =>
-      _pids.values.where((p) => p.isCritical).toList();
-
   static List<PidDefinition> getByProtocol(PidProtocol protocol) =>
       _pids.values.where((p) => p.protocol == protocol).toList();
 
