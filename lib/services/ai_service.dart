@@ -229,41 +229,40 @@ Be specific — reference actual values from the data. Keep each item concise.
       final text = response.text?.trim() ?? '';
       final jsonStr = _extractJson(text);
 
-      final dynamic decoded = json.decode(jsonStr);
+      final decoded = json.decode(jsonStr);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Response is not a JSON object');
       }
-      final parsed = decoded;
 
       // Validate required fields and types
-      if (!parsed.containsKey('healthScore') || !parsed.containsKey('summary')) {
+      if (!decoded.containsKey('healthScore') || !decoded.containsKey('summary')) {
         throw const FormatException('Missing required analysis fields');
       }
-      if (parsed['healthScore'] is! num) {
+      if (decoded['healthScore'] is! num) {
         throw const FormatException('healthScore must be a number');
       }
-      if (parsed['summary'] is! String) {
+      if (decoded['summary'] is! String) {
         throw const FormatException('summary must be a string');
       }
 
       // Clamp healthScore to valid range
-      final score = (parsed['healthScore'] as num).toInt().clamp(0, 100);
-      parsed['healthScore'] = score;
+      final score = (decoded['healthScore'] as num).toInt().clamp(0, 100);
+      decoded['healthScore'] = score;
 
       // Validate optional list fields are actually lists
       for (final key in ['anomalies', 'recommendations']) {
-        if (parsed.containsKey(key) && parsed[key] is! List) {
-          parsed[key] = <String>[];
+        if (decoded.containsKey(key) && decoded[key] is! List) {
+          decoded[key] = <String>[];
         }
       }
 
       // Validate highlights is a map if present
-      if (parsed.containsKey('highlights') &&
-          parsed['highlights'] is! Map) {
-        parsed['highlights'] = <String, dynamic>{};
+      if (decoded.containsKey('highlights') &&
+          decoded['highlights'] is! Map) {
+        decoded['highlights'] = <String, dynamic>{};
       }
 
-      return parsed;
+      return decoded;
     } catch (e) {
       throw AiServiceException('Analysis failed: $e');
     }
@@ -317,24 +316,23 @@ Use 3 columns, up to 4 rows. Prioritize the most relevant parameters.
       // Parse JSON from response, handling potential markdown fences
       final jsonStr = _extractJson(text);
 
-      final dynamic decoded = json.decode(jsonStr);
+      final decoded = json.decode(jsonStr);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Response is not a JSON object');
       }
-      final parsed = decoded;
 
       // Validate required fields and types
-      if (!parsed.containsKey('layout') || !parsed.containsKey('name')) {
+      if (!decoded.containsKey('layout') || !decoded.containsKey('name')) {
         throw const FormatException('Missing required dashboard fields');
       }
-      if (parsed['name'] is! String) {
+      if (decoded['name'] is! String) {
         throw const FormatException('name must be a string');
       }
-      if (parsed['layout'] is! Map) {
+      if (decoded['layout'] is! Map) {
         throw const FormatException('layout must be an object');
       }
 
-      return parsed;
+      return decoded;
     } catch (e) {
       throw AiServiceException('Dashboard generation failed: $e');
     }

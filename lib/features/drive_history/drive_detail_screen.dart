@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../app/theme.dart';
+import '../../config/constants.dart';
 import '../../models/drive_session.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/drive_stats_provider.dart';
@@ -169,6 +170,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
                 onSelected: (value) {
                   if (value == 'explorer') {
                     context.go('/explorer');
+                  } else if (value == 'share') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Share coming soon')),
+                    );
                   }
                 },
               ),
@@ -1070,11 +1075,11 @@ class _TagsSection extends ConsumerWidget {
     if (uid == null || vehicle == null) return;
 
     FirebaseFirestore.instance
-        .collection('users')
+        .collection(AppConstants.usersCollection)
         .doc(uid)
-        .collection('vehicles')
+        .collection(AppConstants.vehiclesSubcollection)
         .doc(vehicle.id)
-        .collection('drives')
+        .collection(AppConstants.drivesSubcollection)
         .doc(driveId)
         .update({
       'tags': FieldValue.arrayUnion([tag]),

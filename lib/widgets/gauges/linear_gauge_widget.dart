@@ -12,7 +12,6 @@ class LinearGaugeWidget extends StatefulWidget {
   final double? minOverride;
   final double? maxOverride;
   final bool showLabel;
-  final bool horizontal;
   final VoidCallback? onTap;
 
   const LinearGaugeWidget({
@@ -22,7 +21,6 @@ class LinearGaugeWidget extends StatefulWidget {
     this.minOverride,
     this.maxOverride,
     this.showLabel = true,
-    this.horizontal = true,
     this.onTap,
   });
 

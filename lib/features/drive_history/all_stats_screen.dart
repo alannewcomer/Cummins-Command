@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/theme.dart';
+import '../../models/drive_session.dart';
 import '../../models/drive_stats.dart';
 import '../../providers/drive_stats_provider.dart';
 import '../../providers/drives_provider.dart';
@@ -81,7 +82,7 @@ class AllStatsScreen extends ConsumerWidget {
 
 class _StatsBody extends StatelessWidget {
   final DriveStats stats;
-  final dynamic drive; // DriveSession
+  final DriveSession drive;
 
   const _StatsBody({required this.stats, required this.drive});
 

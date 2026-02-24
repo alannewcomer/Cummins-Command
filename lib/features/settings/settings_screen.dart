@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
+import '../../models/vehicle.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/vehicle_provider.dart';
@@ -29,7 +30,7 @@ class SettingsScreen extends ConsumerWidget {
           vehiclesAsync.when(
             data: (vehicles) {
               if (vehicles.isEmpty) {
-                return _AddVehicleCard(ref: ref);
+                return const _AddVehicleCard();
               }
               return Column(
                 children: [
@@ -43,12 +44,12 @@ class SettingsScreen extends ConsumerWidget {
                           },
                         ),
                       )),
-                  _AddVehicleCard(ref: ref),
+                  const _AddVehicleCard(),
                 ],
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) => _AddVehicleCard(ref: ref),
+            error: (_, __) => const _AddVehicleCard(),
           ),
 
           const SizedBox(height: AppSpacing.xxl),
@@ -363,7 +364,7 @@ class _SignOutTile extends ConsumerWidget {
 }
 
 class _VehicleCard extends StatelessWidget {
-  final dynamic vehicle;
+  final Vehicle vehicle;
   final bool isActive;
   final VoidCallback? onTap;
 
@@ -437,9 +438,7 @@ class _VehicleCard extends StatelessWidget {
 }
 
 class _AddVehicleCard extends StatelessWidget {
-  final WidgetRef ref;
-
-  const _AddVehicleCard({required this.ref});
+  const _AddVehicleCard();
 
   @override
   Widget build(BuildContext context) {

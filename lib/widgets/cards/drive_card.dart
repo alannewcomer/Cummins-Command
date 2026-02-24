@@ -8,13 +8,11 @@ import '../common/glass_card.dart';
 class DriveCard extends StatelessWidget {
   final DriveSession drive;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   const DriveCard({
     super.key,
     required this.drive,
     this.onTap,
-    this.onLongPress,
   });
 
   @override
@@ -26,7 +24,6 @@ class DriveCard extends StatelessWidget {
 
     return GlassCard(
       onTap: onTap,
-      onLongPress: onLongPress,
       padding: const EdgeInsets.all(AppSpacing.lg),
       glowColor: healthColor,
       child: Column(

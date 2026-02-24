@@ -57,7 +57,6 @@ class DriveRecorder {
   bool _autoDetectEnabled = false;
   DateTime? _speedAboveThresholdSince;
   DateTime? _speedBelowThresholdSince;
-  Timer? _autoDetectTimer;
 
   // Timeseries writer (replaces Firestore batch buffer)
   TimeseriesWriter? _timeseriesWriter;
@@ -279,7 +278,6 @@ class DriveRecorder {
   /// Disable auto-detection.
   void disableAutoDetect() {
     _autoDetectEnabled = false;
-    _autoDetectTimer?.cancel();
     // Don't cancel the data subscription if we're recording
     if (!_recording) {
       _dataSubscription?.cancel();
@@ -535,7 +533,6 @@ class DriveRecorder {
     _disposed = true;
     _recording = false;
     _autoDetectEnabled = false;
-    _autoDetectTimer?.cancel();
     _dataSubscription?.cancel();
     _locationService?.stopTracking();
   }
