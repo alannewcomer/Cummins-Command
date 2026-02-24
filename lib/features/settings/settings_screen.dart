@@ -64,6 +64,15 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.push('/bluetooth-setup'),
           ),
 
+          const SizedBox(height: AppSpacing.sm),
+          _SettingsTile(
+            icon: Icons.menu_book,
+            title: 'PID Reference Guide',
+            subtitle: '${28} parameters — ranges, thresholds & Cummins notes',
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+            onTap: () => context.push('/pid-reference'),
+          ),
+
           const SizedBox(height: AppSpacing.xxl),
 
           // ── Display ──
