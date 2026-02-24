@@ -525,6 +525,13 @@ class _DashboardGrid extends StatelessWidget {
     final layoutMap =
         dashboardConfig['layout'] as Map<String, dynamic>? ?? {};
     final layout = DashboardLayout.fromMap(layoutMap);
+
+    // Row-based layout
+    if (layout.layoutType == 'rows' && layout.rowDefs.isNotEmpty) {
+      return _buildRowLayout(context, layout.rowDefs);
+    }
+
+    // Legacy grid layout fallback
     final columns = layout.columns;
     final widgets = layout.widgets;
 
@@ -552,11 +559,9 @@ class _DashboardGrid extends StatelessWidget {
       );
     }
 
-    // childAspectRatio can be overridden per-template (e.g., All Parameters)
     final aspectRatio =
         (layoutMap['childAspectRatio'] as num?)?.toDouble() ?? 1.0;
 
-    // Build a flat list of widget configs, then display in a grid
     return SliverGrid(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columns,
@@ -571,28 +576,95 @@ class _DashboardGrid extends StatelessWidget {
           final widgetConfig = widgets[index];
           return _AnimatedDashboardWidget(
             index: index,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadius.medium),
-                border: Border.all(color: AppColors.surfaceBorder),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.medium),
-                child: DashboardWidgetFactory.build(
-                  config: widgetConfig.toMap(),
-                  liveData: liveData,
-                  sparklineData: sparklineData,
-                  onWidgetTap: (paramId) {
-                    HapticFeedback.lightImpact();
-                    context.push('/explorer');
-                  },
-                ),
-              ),
-            ),
+            child: _buildWidgetCell(context, widgetConfig.toMap()),
           );
         },
         childCount: widgets.length,
+      ),
+    );
+  }
+
+  SliverList _buildRowLayout(BuildContext context, List<DashboardRow> rowDefs) {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index >= rowDefs.length) return null;
+
+          final row = rowDefs[index];
+
+          return _AnimatedDashboardWidget(
+            index: index,
+            child: _buildRow(context, row),
+          );
+        },
+        childCount: rowDefs.length,
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, DashboardRow row) {
+    // Header row — section title
+    if (row.type == 'header') {
+      return SizedBox(
+        height: row.height,
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              row.title ?? '',
+              style: AppTypography.displaySmall.copyWith(
+                fontSize: 11,
+                color: AppColors.textTertiary,
+                letterSpacing: 2.0,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Widget row
+    final widgets = row.widgets;
+    if (widgets.isEmpty) return SizedBox(height: row.height);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: SizedBox(
+        height: row.height,
+        child: Row(
+          children: [
+            for (int i = 0; i < widgets.length; i++) ...[
+              if (i > 0) const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                flex: widgets[i].colSpan,
+                child: _buildWidgetCell(context, widgets[i].toMap()),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWidgetCell(BuildContext context, Map<String, dynamic> config) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        border: Border.all(color: AppColors.surfaceBorder),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.medium),
+        child: DashboardWidgetFactory.build(
+          config: config,
+          liveData: liveData,
+          sparklineData: sparklineData,
+          onWidgetTap: (paramId) {
+            HapticFeedback.lightImpact();
+            context.push('/explorer');
+          },
+        ),
       ),
     );
   }

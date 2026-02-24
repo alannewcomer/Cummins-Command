@@ -6,6 +6,7 @@ import '../features/command_center/command_center_screen.dart';
 import '../features/data_explorer/data_explorer_screen.dart';
 import '../features/drive_history/drive_history_screen.dart';
 import '../features/drive_history/drive_detail_screen.dart';
+import '../features/drive_history/route_detail_screen.dart';
 import '../features/ai_insights/ai_insights_screen.dart';
 import '../features/maintenance/maintenance_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -122,6 +123,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/drives/:driveId',
         builder: (context, state) => DriveDetailScreen(
           driveId: state.pathParameters['driveId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/routes/:routeId',
+        builder: (context, state) => RouteDetailScreen(
+          routeId: state.pathParameters['routeId']!,
         ),
       ),
       GoRoute(

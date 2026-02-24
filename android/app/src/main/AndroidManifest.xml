@@ -32,7 +32,7 @@
             android:enabled="true"
             android:exported="false"
             android:stopWithTask="false"
-            android:foregroundServiceType="connectedDevice"
+            android:foregroundServiceType="connectedDevice|location"
             tools:node="replace" />
         <activity
             android:name=".MainActivity"

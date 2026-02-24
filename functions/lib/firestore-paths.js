@@ -8,6 +8,7 @@ const DATAPOINTS = 'datapoints';
 const MAINTENANCE = 'maintenance';
 const AI_JOBS = 'aiJobs';
 const SHARING = 'sharing';
+const ROUTES = 'routes';
 
 // Path builders
 const paths = {
@@ -22,6 +23,8 @@ const paths = {
     `${USERS}/${uid}/${VEHICLES}/${vid}/${MAINTENANCE}`,
   dashboards: (uid) => `${USERS}/${uid}/dashboards`,
   aiJobs: (uid) => `${USERS}/${uid}/${AI_JOBS}`,
+  routes: (uid, vid) => `${USERS}/${uid}/${VEHICLES}/${vid}/${ROUTES}`,
+  route: (uid, vid, rid) => `${USERS}/${uid}/${VEHICLES}/${vid}/${ROUTES}/${rid}`,
 };
 
 module.exports = {
@@ -33,4 +36,5 @@ module.exports = {
   MAINTENANCE,
   AI_JOBS,
   SHARING,
+  ROUTES,
 };

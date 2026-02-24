@@ -5,6 +5,7 @@ import '../gauges/linear_gauge_widget.dart';
 import '../gauges/digital_readout_widget.dart';
 import '../gauges/gauge_painters.dart';
 import '../charts/sparkline_widget.dart';
+import 'compact_data_strip.dart';
 import '../../app/theme.dart';
 import '../../config/pid_config.dart';
 import '../../config/thresholds.dart';
@@ -52,6 +53,14 @@ class DashboardWidgetFactory {
           paramId: param,
           data: sparklineData[param] ?? [],
           onTap: onWidgetTap != null ? () => onWidgetTap(param) : null,
+        );
+
+      case 'dataStrip':
+        final params = (config['params'] as List<dynamic>?)?.cast<String>() ?? [param];
+        return CompactDataStrip(
+          paramIds: params,
+          liveData: liveData,
+          onWidgetTap: onWidgetTap,
         );
 
       case 'progressRing':

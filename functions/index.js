@@ -6,7 +6,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { readTimeseries, readTimeseriesColumns } = require('./lib/timeseries');
 const { callGeminiPro, callGeminiFlash } = require('./lib/gemini');
 const { convertToParquet } = require('./lib/parquet-converter');
-const { paths, USERS, VEHICLES, DRIVES, DATAPOINTS, MAINTENANCE, AI_JOBS, SHARING } = require('./lib/firestore-paths');
+const { paths, USERS, VEHICLES, DRIVES, DATAPOINTS, MAINTENANCE, AI_JOBS, SHARING, ROUTES } = require('./lib/firestore-paths');
 const {
   buildDriveAnalysisPrompt,
   buildRangeAnalysisPrompt,
@@ -53,15 +53,29 @@ exports.analyzeDrive = onDocumentUpdated(
         'low'
       );
 
-      // Write results back to drive doc
-      await driveRef.update({
+      // Write AI results back to drive doc
+      const driveUpdate = {
         aiSummary: analysis.summary || '',
         aiAnomalies: analysis.anomalies || [],
         aiHealthScore: analysis.healthScore || 0,
         aiRecommendations: analysis.recommendations || [],
+        autoTags: analysis.autoTags || [],
         aiAnalyzedAt: FieldValue.serverTimestamp(),
         status: 'analysisComplete',
-      });
+      };
+
+      // Route matching
+      try {
+        const routeResult = await matchRoute(db, uid, vid, did, after, analysis);
+        if (routeResult) {
+          driveUpdate.routeId = routeResult.routeId;
+          driveUpdate.routeName = routeResult.routeName;
+        }
+      } catch (routeErr) {
+        console.error(`Route matching failed for ${did}:`, routeErr);
+      }
+
+      await driveRef.update(driveUpdate);
     } catch (err) {
       console.error(`analyzeDrive failed for ${did}:`, err);
       await driveRef.update({
@@ -620,6 +634,151 @@ exports.driveToParquet = onDocumentUpdated(
     }
   }
 );
+
+// ──────────────────────────────────────────────────────────────
+// Helper: Geohash encoding (precision 5 ~ 5km box)
+// ──────────────────────────────────────────────────────────────
+const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+
+function encodeGeohash(lat, lng, precision = 5) {
+  let minLat = -90, maxLat = 90;
+  let minLng = -180, maxLng = 180;
+  let hash = '';
+  let bits = 0;
+  let charIndex = 0;
+  let isLng = true;
+
+  while (hash.length < precision) {
+    if (isLng) {
+      const mid = (minLng + maxLng) / 2;
+      if (lng >= mid) { charIndex = (charIndex << 1) | 1; minLng = mid; }
+      else { charIndex = charIndex << 1; maxLng = mid; }
+    } else {
+      const mid = (minLat + maxLat) / 2;
+      if (lat >= mid) { charIndex = (charIndex << 1) | 1; minLat = mid; }
+      else { charIndex = charIndex << 1; maxLat = mid; }
+    }
+    isLng = !isLng;
+    bits++;
+    if (bits === 5) {
+      hash += BASE32[charIndex];
+      bits = 0;
+      charIndex = 0;
+    }
+  }
+  return hash;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Helper: Route matching — find or create route for a drive
+// ──────────────────────────────────────────────────────────────
+async function matchRoute(db, uid, vid, did, drive, analysis) {
+  const startLat = drive.gpsStartLat;
+  const startLng = drive.gpsStartLng;
+  const endLat = drive.gpsEndLat;
+  const endLng = drive.gpsEndLng;
+
+  if (startLat == null || startLng == null || endLat == null || endLng == null) {
+    return null;
+  }
+
+  const startGeohash = encodeGeohash(startLat, startLng, 5);
+  const endGeohash = encodeGeohash(endLat, endLng, 5);
+
+  const routesCol = db.collection(paths.routes(uid, vid));
+
+  // Query for existing route with matching geohash pair
+  const matchSnap = await routesCol
+    .where('startGeohash', '==', startGeohash)
+    .where('endGeohash', '==', endGeohash)
+    .limit(1)
+    .get();
+
+  const driveHealthScore = analysis.healthScore || 0;
+  const driveMPG = drive.averageMPG || 0;
+  const driveDuration = drive.durationSeconds || 0;
+  const driveMaxEGT = drive.maxEgtF || (drive.maximums && drive.maximums.maxEgtF) || null;
+  const driveMaxBoost = drive.maxBoostPsi || (drive.maximums && drive.maximums.maxBoostPsi) || null;
+  const driveMaxTransTemp = drive.maxTransTempF || (drive.maximums && drive.maximums.maxTransTempF) || null;
+
+  if (!matchSnap.empty) {
+    // Existing route — update running averages
+    const routeDoc = matchSnap.docs[0];
+    const route = routeDoc.data();
+    const oldCount = route.driveCount || 0;
+    const newCount = oldCount + 1;
+
+    const update = {
+      driveCount: newCount,
+      lastDriveDate: FieldValue.serverTimestamp(),
+    };
+
+    // Running averages
+    if (driveMPG > 0) {
+      update.avgMPG = ((route.avgMPG || 0) * oldCount + driveMPG) / newCount;
+    }
+    if (driveDuration > 0) {
+      update.avgDuration = ((route.avgDuration || 0) * oldCount + driveDuration) / newCount;
+    }
+    if (driveMaxEGT != null) {
+      update.avgMaxEGT = ((route.avgMaxEGT || 0) * oldCount + driveMaxEGT) / newCount;
+    }
+    if (driveMaxBoost != null) {
+      update.avgMaxBoost = ((route.avgMaxBoost || 0) * oldCount + driveMaxBoost) / newCount;
+    }
+    if (driveMaxTransTemp != null) {
+      update.avgMaxTransTemp = ((route.avgMaxTransTemp || 0) * oldCount + driveMaxTransTemp) / newCount;
+    }
+
+    // Best/worst tracking
+    if (driveMPG > 0) {
+      if (!route.bestMPG || driveMPG > route.bestMPG) {
+        update.bestMPG = driveMPG;
+        update.bestDriveId = did;
+      }
+      if (!route.worstMPG || driveMPG < route.worstMPG) {
+        update.worstMPG = driveMPG;
+        update.worstDriveId = did;
+      }
+    }
+
+    await routeDoc.ref.update(update);
+
+    return { routeId: routeDoc.id, routeName: route.name };
+  } else {
+    // New route — count existing routes to generate name
+    const countSnap = await routesCol.count().get();
+    const routeNumber = (countSnap.data().count || 0) + 1;
+    const routeName = `Route #${routeNumber}`;
+
+    const newRoute = {
+      vehicleId: vid,
+      name: routeName,
+      startGeohash,
+      endGeohash,
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+      driveCount: 1,
+      avgMPG: driveMPG > 0 ? driveMPG : null,
+      avgDuration: driveDuration > 0 ? driveDuration : null,
+      avgMaxEGT: driveMaxEGT,
+      avgMaxBoost: driveMaxBoost,
+      avgMaxTransTemp: driveMaxTransTemp,
+      bestDriveId: driveMPG > 0 ? did : null,
+      worstDriveId: driveMPG > 0 ? did : null,
+      bestMPG: driveMPG > 0 ? driveMPG : null,
+      worstMPG: driveMPG > 0 ? driveMPG : null,
+      lastDriveDate: FieldValue.serverTimestamp(),
+      aiRouteInsights: null,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+
+    const newRouteRef = await routesCol.add(newRoute);
+    return { routeId: newRouteRef.id, routeName };
+  }
+}
 
 // ──────────────────────────────────────────────────────────────
 // Helper: Build stats object from drive doc's parameterStats map

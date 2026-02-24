@@ -55,6 +55,9 @@ dependencies:
   flutter_bluetooth_classic_serial:
     path: packages/flutter_bluetooth_classic_serial
 
+  # Image picker (drive photos)
+  image_picker: ^1.1.2
+
   # GPS (device location for drive route maps)
   geolocator: ^13.0.2
 

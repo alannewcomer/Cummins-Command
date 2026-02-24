@@ -64,6 +64,21 @@ class DriveSession {
   // Tags
   final List<String> tags;
 
+  // Notes & Cargo
+  final String? notes;
+  final String? cargoDescription;
+  final double? cargoWeightLbs;
+
+  // Route Intelligence
+  final String? routeId;
+  final String? routeName;
+
+  // Smart Auto-Tags (AI-generated, separate from user tags)
+  final List<String> autoTags;
+
+  // Photos
+  final List<String> photoUrls;
+
   // Timeseries storage
   final String? timeseriesPath;
   final bool timeseriesUploaded;
@@ -111,6 +126,13 @@ class DriveSession {
     this.aiHealthScore,
     this.aiRecommendations = const [],
     this.tags = const [],
+    this.notes,
+    this.cargoDescription,
+    this.cargoWeightLbs,
+    this.routeId,
+    this.routeName,
+    this.autoTags = const [],
+    this.photoUrls = const [],
     this.timeseriesPath,
     this.timeseriesUploaded = false,
     this.parquetPath,
@@ -169,6 +191,13 @@ class DriveSession {
     int? aiHealthScore,
     List<String>? aiRecommendations,
     List<String>? tags,
+    String? notes,
+    String? cargoDescription,
+    double? cargoWeightLbs,
+    String? routeId,
+    String? routeName,
+    List<String>? autoTags,
+    List<String>? photoUrls,
     String? timeseriesPath,
     bool? timeseriesUploaded,
     String? parquetPath,
@@ -215,6 +244,13 @@ class DriveSession {
       aiHealthScore: aiHealthScore ?? this.aiHealthScore,
       aiRecommendations: aiRecommendations ?? this.aiRecommendations,
       tags: tags ?? this.tags,
+      notes: notes ?? this.notes,
+      cargoDescription: cargoDescription ?? this.cargoDescription,
+      cargoWeightLbs: cargoWeightLbs ?? this.cargoWeightLbs,
+      routeId: routeId ?? this.routeId,
+      routeName: routeName ?? this.routeName,
+      autoTags: autoTags ?? this.autoTags,
+      photoUrls: photoUrls ?? this.photoUrls,
       timeseriesPath: timeseriesPath ?? this.timeseriesPath,
       timeseriesUploaded: timeseriesUploaded ?? this.timeseriesUploaded,
       parquetPath: parquetPath ?? this.parquetPath,
@@ -267,6 +303,13 @@ class DriveSession {
       'aiHealthScore': aiHealthScore,
       'aiRecommendations': aiRecommendations,
       'tags': tags,
+      'notes': notes,
+      'cargoDescription': cargoDescription,
+      'cargoWeightLbs': cargoWeightLbs,
+      'routeId': routeId,
+      'routeName': routeName,
+      'autoTags': autoTags,
+      'photoUrls': photoUrls,
       'timeseriesPath': timeseriesPath,
       'timeseriesUploaded': timeseriesUploaded,
       'parquetPath': parquetPath,
@@ -322,6 +365,13 @@ class DriveSession {
       aiHealthScore: (d['aiHealthScore'] as num?)?.toInt(),
       aiRecommendations: (d['aiRecommendations'] as List<dynamic>?)?.cast<String>() ?? [],
       tags: (d['tags'] as List<dynamic>?)?.cast<String>() ?? [],
+      notes: d['notes'] as String?,
+      cargoDescription: d['cargoDescription'] as String?,
+      cargoWeightLbs: (d['cargoWeightLbs'] as num?)?.toDouble(),
+      routeId: d['routeId'] as String?,
+      routeName: d['routeName'] as String?,
+      autoTags: (d['autoTags'] as List<dynamic>?)?.cast<String>() ?? [],
+      photoUrls: (d['photoUrls'] as List<dynamic>?)?.cast<String>() ?? [],
       timeseriesPath: d['timeseriesPath'] as String?,
       timeseriesUploaded: d['timeseriesUploaded'] as bool? ?? false,
       parquetPath: d['parquetPath'] as String?,

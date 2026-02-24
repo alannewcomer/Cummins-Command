@@ -3,10 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:intl/intl.dart';
+
 import '../../app/theme.dart';
+import '../../models/drive_route.dart';
 import '../../models/drive_session.dart';
 import '../../providers/drives_provider.dart';
 import '../../widgets/cards/drive_card.dart';
+import '../../widgets/common/glass_card.dart';
 
 /// Available filter tags for drive history.
 const _filterTags = ['All', 'Towing', 'Commute', 'Mountain', 'Track'];
@@ -21,10 +25,12 @@ class DriveHistoryScreen extends ConsumerStatefulWidget {
 
 class _DriveHistoryScreenState extends ConsumerState<DriveHistoryScreen> {
   String _activeFilter = 'All';
+  bool _showRoutes = false;
 
   @override
   Widget build(BuildContext context) {
     final drivesAsync = ref.watch(drivesStreamProvider);
+    final routesAsync = ref.watch(routesStreamProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -39,75 +45,146 @@ class _DriveHistoryScreenState extends ConsumerState<DriveHistoryScreen> {
             surfaceTintColor: Colors.transparent,
             title: Text('Drive History', style: AppTypography.displaySmall),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.filter_list, size: 22),
-                color: AppColors.textSecondary,
-                onPressed: () => _showFilterSheet(context),
-              ),
+              if (!_showRoutes)
+                IconButton(
+                  icon: const Icon(Icons.filter_list, size: 22),
+                  color: AppColors.textSecondary,
+                  onPressed: () => _showFilterSheet(context),
+                ),
             ],
           ),
 
-          // Filter chips
+          // Drives / Routes toggle
           SliverToBoxAdapter(
-            child: _FilterChips(
-              tags: _filterTags,
-              active: _activeFilter,
-              onSelected: (tag) {
-                HapticFeedback.lightImpact();
-                setState(() => _activeFilter = tag);
-              },
-            ),
-          ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-
-          // Drive list
-          drivesAsync.when(
-            data: (drives) {
-              final filtered = _filterDrives(drives);
-              if (filtered.isEmpty) {
-                return SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _EmptyState(hasFilter: _activeFilter != 'All'),
-                );
-              }
-              return SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index >= filtered.length) return null;
-                      final drive = filtered[index];
-                      return _StaggeredDriveCard(
-                        index: index,
-                        drive: drive,
-                        onTap: () => context.push('/drives/${drive.id}'),
-                      );
-                    },
-                    childCount: filtered.length,
-                  ),
-                ),
-              );
-            },
-            loading: () => SliverPadding(
+            child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _ShimmerDriveCard(index: index),
-                  ),
-                  childCount: 5,
-                ),
+              child: _TabToggle(
+                showRoutes: _showRoutes,
+                onChanged: (value) {
+                  HapticFeedback.lightImpact();
+                  setState(() => _showRoutes = value);
+                },
               ),
             ),
-            error: (error, _) => SliverFillRemaining(
-              hasScrollBody: false,
-              child: _ErrorState(error: error.toString()),
-            ),
           ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+
+          if (!_showRoutes) ...[
+            // Filter chips
+            SliverToBoxAdapter(
+              child: _FilterChips(
+                tags: _filterTags,
+                active: _activeFilter,
+                onSelected: (tag) {
+                  HapticFeedback.lightImpact();
+                  setState(() => _activeFilter = tag);
+                },
+              ),
+            ),
+
+            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+
+            // Drive list
+            drivesAsync.when(
+              data: (drives) {
+                final filtered = _filterDrives(drives);
+                if (filtered.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _EmptyState(hasFilter: _activeFilter != 'All'),
+                  );
+                }
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index >= filtered.length) return null;
+                        final drive = filtered[index];
+                        return _StaggeredDriveCard(
+                          index: index,
+                          drive: drive,
+                          onTap: () => context.push('/drives/${drive.id}'),
+                        );
+                      },
+                      childCount: filtered.length,
+                    ),
+                  ),
+                );
+              },
+              loading: () => SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _ShimmerDriveCard(index: index),
+                    ),
+                    childCount: 5,
+                  ),
+                ),
+              ),
+              error: (error, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: _ErrorState(error: error.toString()),
+              ),
+            ),
+          ] else ...[
+            // Routes list
+            routesAsync.when(
+              data: (routes) {
+                if (routes.isEmpty) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _RoutesEmptyState(),
+                  );
+                }
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final route = routes[index];
+                        return Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.md),
+                          child: _RouteCard(
+                            route: route,
+                            onTap: () =>
+                                context.push('/routes/${route.id}'),
+                          ),
+                        );
+                      },
+                      childCount: routes.length,
+                    ),
+                  ),
+                );
+              },
+              loading: () => SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _ShimmerDriveCard(index: index),
+                    ),
+                    childCount: 3,
+                  ),
+                ),
+              ),
+              error: (error, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: _ErrorState(error: error.toString()),
+              ),
+            ),
+          ],
 
           // Bottom padding
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxxl)),
@@ -534,6 +611,251 @@ class _ErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Tab Toggle (Drives / Routes) ───
+
+class _TabToggle extends StatelessWidget {
+  final bool showRoutes;
+  final ValueChanged<bool> onChanged;
+
+  const _TabToggle({required this.showRoutes, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(AppRadius.round),
+        border: Border.all(color: AppColors.surfaceBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(false),
+              child: AnimatedContainer(
+                duration: AppTheme.animDuration,
+                decoration: BoxDecoration(
+                  color: !showRoutes
+                      ? AppColors.primary.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.round),
+                ),
+                child: Center(
+                  child: Text(
+                    'Drives',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: !showRoutes
+                          ? AppColors.primary
+                          : AppColors.textTertiary,
+                      fontWeight:
+                          !showRoutes ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(true),
+              child: AnimatedContainer(
+                duration: AppTheme.animDuration,
+                decoration: BoxDecoration(
+                  color: showRoutes
+                      ? AppColors.primary.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.round),
+                ),
+                child: Center(
+                  child: Text(
+                    'Routes',
+                    style: AppTypography.labelMedium.copyWith(
+                      color: showRoutes
+                          ? AppColors.primary
+                          : AppColors.textTertiary,
+                      fontWeight:
+                          showRoutes ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Route Card ───
+
+class _RouteCard extends StatelessWidget {
+  final DriveRoute route;
+  final VoidCallback onTap;
+
+  const _RouteCard({required this.route, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('MMM d, yyyy');
+
+    return GlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.place, size: 18, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  route.name,
+                  style: AppTypography.displaySmall.copyWith(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDim,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
+                ),
+                child: Text(
+                  '${route.driveCount} ${route.driveCount == 1 ? 'drive' : 'drives'}',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              if (route.avgMPG != null) ...[
+                _RouteStatChip(
+                  label: 'AVG MPG',
+                  value: route.avgMPG!.toStringAsFixed(1),
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              if (route.avgMaxBoost != null) ...[
+                _RouteStatChip(
+                  label: 'BOOST',
+                  value: '${route.avgMaxBoost!.toStringAsFixed(1)} PSI',
+                  color: AppColors.dataAccent,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              if (route.avgMaxEGT != null)
+                _RouteStatChip(
+                  label: 'EGT',
+                  value: '${route.avgMaxEGT!.toStringAsFixed(0)}F',
+                  color: AppColors.warning,
+                ),
+            ],
+          ),
+          if (route.lastDriveDate != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Last driven: ${dateFormat.format(route.lastDriveDate!)}',
+              style: AppTypography.bodySmall,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteStatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _RouteStatChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadius.small),
+      ),
+      child: Text(
+        '$label $value',
+        style: AppTypography.labelSmall.copyWith(
+          color: color,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Routes Empty State ───
+
+class _RoutesEmptyState extends StatelessWidget {
+  const _RoutesEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxxl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.primary.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                ),
+              ),
+              child: Icon(
+                Icons.map_outlined,
+                size: 44,
+                color: AppColors.primary.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            Text(
+              'No Routes Yet',
+              style: AppTypography.displaySmall.copyWith(fontSize: 18),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Routes are automatically detected\nwhen you complete drives with GPS.',
+              style: AppTypography.bodyMedium,
+              textAlign: TextAlign.center,
             ),
           ],
         ),

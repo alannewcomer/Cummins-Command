@@ -52,12 +52,23 @@ Drive session ${drive.id}:
 Parameter Statistics:
 ${formatStats(stats)}
 
+Also classify this drive with applicable tags from this list:
+- "towing" (high sustained load >60%, low speed, high EGT)
+- "highway" (avg speed >45 mph, low throttle variance)
+- "city" (avg speed <35 mph, high idle %, frequent speed changes)
+- "mountain" (sustained high load with altitude/GPS changes)
+- "cold_start" (coolant temp <140F at drive start)
+- "dpf_regen" (DPF regen detected during drive)
+- "hard_driving" (frequent >80% throttle, high RPM variance)
+- "efficient" (MPG in top 20% for this vehicle's baseline)
+
 Analyse this drive and respond with JSON:
 {
   "summary": "2-3 sentence plain-English summary of the drive",
   "anomalies": ["list of any anomalous readings or patterns"],
   "healthScore": 0-100,
-  "recommendations": ["actionable recommendations if any"]
+  "recommendations": ["actionable recommendations if any"],
+  "autoTags": ["tag1", "tag2"]
 }`;
 }
 

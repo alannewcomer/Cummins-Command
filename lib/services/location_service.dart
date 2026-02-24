@@ -33,12 +33,14 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       diag.warn(_tag, 'Location services disabled',
-          'Drive will record without GPS');
+          'Drive will record without GPS. Enable GPS in device settings.');
       return false;
     }
 
-    // Check / request permission
+    // Check / request permission (should already be granted at app startup,
+    // but handle edge case where user revoked it)
     var permission = await Geolocator.checkPermission();
+    diag.info(_tag, 'GPS permission check', '$permission');
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -50,8 +52,23 @@ class LocationService {
 
     if (permission == LocationPermission.deniedForever) {
       diag.warn(_tag, 'Location permission permanently denied',
-          'Drive will record without GPS');
+          'Open Settings > Apps > Cummins Command > Permissions to grant location');
       return false;
+    }
+
+    // Get an initial position fix before starting the stream so the first
+    // datapoint has GPS data immediately
+    try {
+      _lastPosition = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(const Duration(seconds: 5));
+      diag.info(_tag, 'Initial GPS fix acquired',
+          'lat=${_lastPosition!.latitude.toStringAsFixed(5)} '
+          'lng=${_lastPosition!.longitude.toStringAsFixed(5)}');
+    } catch (e) {
+      diag.warn(_tag, 'Initial GPS fix timed out', '$e — will use stream');
     }
 
     // Start position stream
@@ -71,7 +88,7 @@ class LocationService {
 
     _tracking = true;
     diag.info(_tag, 'GPS tracking started',
-        'accuracy=high distanceFilter=5m');
+        'accuracy=high distanceFilter=5m permission=$permission');
     return true;
   }
 

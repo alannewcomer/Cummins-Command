@@ -66,6 +66,19 @@ void main() async {
     // foreground service notifications — must be granted BEFORE startForeground)
     await Permission.notification.request();
 
+    // Request precise GPS location permission early — required for GPS route
+    // tracking during drives. Must be granted before drive recording starts.
+    // On Android 12+, ACCESS_FINE_LOCATION grants precise location.
+    final locationStatus = await Permission.locationWhenInUse.request();
+    if (locationStatus.isGranted || locationStatus.isLimited) {
+      // Also ensure precise location is granted (Android 12+ can grant
+      // approximate-only even when FINE is requested)
+      final preciseStatus = await Permission.location.status;
+      if (!preciseStatus.isGranted) {
+        await Permission.location.request();
+      }
+    }
+
     // Configure background service (foreground notification keeps process alive
     // for Bluetooth reconnect when app is backgrounded)
     await initializeBackgroundService();

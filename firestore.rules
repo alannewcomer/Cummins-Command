@@ -40,6 +40,11 @@ service cloud.firestore {
         match /didScans/{scanId} {
           allow read, write: if request.auth != null && request.auth.uid == userId;
         }
+
+        // Routes (auto-detected drive routes)
+        match /routes/{routeId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
       }
 
       // AI job queue

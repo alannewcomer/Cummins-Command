@@ -78,6 +78,7 @@ class AppConstants {
   static const maintenanceSubcollection = 'maintenance';
   static const sharingSubcollection = 'sharing';
   static const aiJobsSubcollection = 'aiJobs';
+  static const routesSubcollection = 'routes';
   static const dashboardTemplatesCollection = 'dashboardTemplates';
   static const pidDefinitionsCollection = 'pidDefinitions';
 

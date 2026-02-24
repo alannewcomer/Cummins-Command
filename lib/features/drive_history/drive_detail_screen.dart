@@ -4,15 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../app/theme.dart';
 import '../../models/drive_session.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/drive_stats_provider.dart';
+import '../../providers/vehicle_provider.dart';
 import '../../widgets/ai/ai_progress_indicator.dart';
 import '../../widgets/ai/ai_status_strip.dart';
 import '../../widgets/common/glass_card.dart';
 import 'sections/route_map_section.dart';
 import 'sections/drive_overview_section.dart';
+import 'sections/notes_section.dart';
+import 'sections/photos_section.dart';
 import 'sections/sparkline_section.dart';
 import 'sections/engine_section.dart';
 import 'sections/thermal_section.dart';
@@ -179,6 +184,22 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
             ),
           ),
 
+          // ─── 1b. Route Badge ───
+          if (drive.routeId != null && drive.routeName != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  top: AppSpacing.md,
+                ),
+                child: _RouteBadge(
+                  routeName: drive.routeName!,
+                  routeId: drive.routeId!,
+                ),
+              ),
+            ),
+
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
           // ─── 2. Route Map (Tier 2) ───
@@ -200,6 +221,20 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
               loading: () => const _ShimmerSection(height: 160),
               error: (_, __) => const SizedBox.shrink(),
             ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+
+          // ─── 3b. Notes & Cargo ───
+          SliverToBoxAdapter(
+            child: NotesSection(drive: drive),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+
+          // ─── 3c. Photos ───
+          SliverToBoxAdapter(
+            child: PhotosSection(drive: drive),
           ),
 
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
@@ -282,11 +317,15 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
           // ─── 11. Tags (Tier 1) ───
-          if (drive.tags.isNotEmpty)
+          if (drive.tags.isNotEmpty || drive.autoTags.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: _TagsSection(tags: drive.tags),
+                child: _TagsSection(
+                  tags: drive.tags,
+                  autoTags: drive.autoTags,
+                  driveId: drive.id,
+                ),
               ),
             ),
 
@@ -760,15 +799,75 @@ class _AiAnalysisSection extends StatelessWidget {
   }
 }
 
-// ─── Tags Section ───
+// ─── Route Badge ───
 
-class _TagsSection extends StatelessWidget {
-  final List<String> tags;
+class _RouteBadge extends StatelessWidget {
+  final String routeName;
+  final String routeId;
 
-  const _TagsSection({required this.tags});
+  const _RouteBadge({required this.routeName, required this.routeId});
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.push('/routes/$routeId');
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primaryDim,
+              borderRadius: BorderRadius.circular(AppRadius.round),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.place, size: 14, color: AppColors.primary),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  routeName,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Icon(Icons.chevron_right,
+                    size: 14, color: AppColors.primary.withValues(alpha: 0.6)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Tags Section ───
+
+class _TagsSection extends ConsumerWidget {
+  final List<String> tags;
+  final List<String> autoTags;
+  final String driveId;
+
+  const _TagsSection({
+    required this.tags,
+    required this.autoTags,
+    required this.driveId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -780,30 +879,193 @@ class _TagsSection extends StatelessWidget {
         Wrap(
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
-          children: tags.map((tag) {
-            return Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.dataAccentDim,
-                borderRadius: BorderRadius.circular(AppRadius.small),
-                border: Border.all(
-                  color: AppColors.dataAccent.withValues(alpha: 0.3),
+          children: [
+            // AI auto-tags
+            ...autoTags.map((tag) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDim,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.diamond_outlined,
+                        size: 11, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      tag,
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            // User tags
+            ...tags.map((tag) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.dataAccentDim,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
+                  border: Border.all(
+                    color: AppColors.dataAccent.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  tag,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: AppColors.dataAccent,
+                  ),
+                ),
+              );
+            }),
+            // Add tag button
+            GestureDetector(
+              onTap: () => _showAddTagSheet(context, ref),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(AppRadius.small),
+                  border: Border.all(color: AppColors.surfaceBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 14, color: AppColors.textTertiary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Add',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Text(
-                tag,
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.dataAccent,
-                ),
-              ),
-            );
-          }).toList(),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  void _showAddTagSheet(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+    const suggestions = [
+      'Towing', 'Commute', 'Road Trip', 'Mountain', 'City',
+      'Highway', 'Track', 'Empty', 'Loaded',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: AppSpacing.xxl,
+            right: AppSpacing.xxl,
+            top: AppSpacing.xxl,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.xxl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Add Tag', style: AppTypography.displaySmall),
+              const SizedBox(height: AppSpacing.lg),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Custom tag...',
+                ),
+                onSubmitted: (value) {
+                  if (value.trim().isNotEmpty) {
+                    _addTag(ref, value.trim());
+                    Navigator.pop(ctx);
+                  }
+                },
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Suggestions', style: AppTypography.labelLarge),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: suggestions
+                    .where((s) => !tags.contains(s))
+                    .map((s) {
+                  return GestureDetector(
+                    onTap: () {
+                      _addTag(ref, s);
+                      Navigator.pop(ctx);
+                    },
+                    child: Chip(
+                      label: Text(s),
+                      backgroundColor: AppColors.surfaceLight,
+                      side: const BorderSide(color: AppColors.surfaceBorder),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _addTag(WidgetRef ref, String tag) {
+    final uid = ref.read(userIdProvider);
+    final vehicle = ref.read(activeVehicleProvider);
+    if (uid == null || vehicle == null) return;
+
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('vehicles')
+        .doc(vehicle.id)
+        .collection('drives')
+        .doc(driveId)
+        .update({
+      'tags': FieldValue.arrayUnion([tag]),
+    });
   }
 }
 

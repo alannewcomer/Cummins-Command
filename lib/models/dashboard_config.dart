@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class DashboardWidget {
   final String type;
   final String param;
+  final List<String>? params; // For multi-param widgets like dataStrip
   final int col;
   final int row;
   final int colSpan;
@@ -14,6 +15,7 @@ class DashboardWidget {
   const DashboardWidget({
     required this.type,
     required this.param,
+    this.params,
     required this.col,
     required this.row,
     this.colSpan = 1,
@@ -25,6 +27,7 @@ class DashboardWidget {
   DashboardWidget copyWith({
     String? type,
     String? param,
+    List<String>? params,
     int? col,
     int? row,
     int? colSpan,
@@ -35,6 +38,7 @@ class DashboardWidget {
     return DashboardWidget(
       type: type ?? this.type,
       param: param ?? this.param,
+      params: params ?? this.params,
       col: col ?? this.col,
       row: row ?? this.row,
       colSpan: colSpan ?? this.colSpan,
@@ -48,6 +52,7 @@ class DashboardWidget {
     return {
       'type': type,
       'param': param,
+      if (params != null) 'params': params,
       'col': col,
       'row': row,
       'colSpan': colSpan,
@@ -61,6 +66,7 @@ class DashboardWidget {
     return DashboardWidget(
       type: m['type'] as String? ?? '',
       param: m['param'] as String? ?? '',
+      params: (m['params'] as List<dynamic>?)?.cast<String>(),
       col: (m['col'] as num?)?.toInt() ?? 0,
       row: (m['row'] as num?)?.toInt() ?? 0,
       colSpan: (m['colSpan'] as num?)?.toInt() ?? 1,
@@ -71,44 +77,95 @@ class DashboardWidget {
   }
 }
 
-/// Grid layout definition for a dashboard.
+/// A single row in a row-based dashboard layout.
+class DashboardRow {
+  final String type; // 'widgets' or 'header'
+  final double height;
+  final List<DashboardWidget> widgets;
+  final String? title; // For header rows
+
+  const DashboardRow({
+    this.type = 'widgets',
+    required this.height,
+    this.widgets = const [],
+    this.title,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type,
+      'height': height,
+      if (title != null) 'title': title,
+      'widgets': widgets.map((w) => w.toMap()).toList(),
+    };
+  }
+
+  factory DashboardRow.fromMap(Map<String, dynamic> m) {
+    return DashboardRow(
+      type: m['type'] as String? ?? 'widgets',
+      height: (m['height'] as num?)?.toDouble() ?? 80,
+      title: m['title'] as String?,
+      widgets: (m['widgets'] as List<dynamic>?)
+              ?.map((w) => DashboardWidget.fromMap(w as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// Layout definition for a dashboard (supports grid or row-based).
 class DashboardLayout {
+  final String layoutType; // 'grid' or 'rows'
   final int columns;
   final int rows;
   final List<DashboardWidget> widgets;
+  final List<DashboardRow> rowDefs;
 
   const DashboardLayout({
+    this.layoutType = 'grid',
     this.columns = 4,
     this.rows = 6,
     this.widgets = const [],
+    this.rowDefs = const [],
   });
 
   DashboardLayout copyWith({
+    String? layoutType,
     int? columns,
     int? rows,
     List<DashboardWidget>? widgets,
+    List<DashboardRow>? rowDefs,
   }) {
     return DashboardLayout(
+      layoutType: layoutType ?? this.layoutType,
       columns: columns ?? this.columns,
       rows: rows ?? this.rows,
       widgets: widgets ?? this.widgets,
+      rowDefs: rowDefs ?? this.rowDefs,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'type': layoutType,
       'columns': columns,
       'rows': rows,
       'widgets': widgets.map((w) => w.toMap()).toList(),
+      if (rowDefs.isNotEmpty) 'rowDefs': rowDefs.map((r) => r.toMap()).toList(),
     };
   }
 
   factory DashboardLayout.fromMap(Map<String, dynamic> m) {
     return DashboardLayout(
+      layoutType: m['type'] as String? ?? 'grid',
       columns: (m['columns'] as num?)?.toInt() ?? 4,
       rows: (m['rows'] as num?)?.toInt() ?? 6,
       widgets: (m['widgets'] as List<dynamic>?)
               ?.map((w) => DashboardWidget.fromMap(w as Map<String, dynamic>))
+              .toList() ??
+          [],
+      rowDefs: (m['rowDefs'] as List<dynamic>?)
+              ?.map((r) => DashboardRow.fromMap(r as Map<String, dynamic>))
               .toList() ??
           [],
     );
