@@ -14,6 +14,7 @@ import '../features/settings/settings_screen.dart';
 import '../features/onboarding/bluetooth_setup_screen.dart';
 import '../features/debug/debug_log_screen.dart';
 import '../features/debug/did_scanner_screen.dart';
+import '../features/settings/pid_reference_screen.dart';
 import '../features/vehicles/add_vehicle_screen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vehicle_provider.dart';
@@ -149,6 +150,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/did-scanner',
         builder: (context, state) => const DidScannerScreen(),
+      ),
+      GoRoute(
+        path: '/pid-reference',
+        builder: (context, state) => const PidReferenceScreen(),
       ),
     ],
   );
