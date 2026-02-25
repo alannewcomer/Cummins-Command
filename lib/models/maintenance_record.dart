@@ -14,6 +14,10 @@ class MaintenanceRecord {
   final String? aiPredictionId;
   final DateTime? nextDueDate;
   final double? nextDueMileage;
+  final String? serviceTypeId;
+  final String? source; // 'manual', 'scheduled', 'checklist', 'seasonal'
+  final String? serviceProvider; // 'DIY', 'Dealer', 'Shop'
+  final List<String> partsUsed;
 
   const MaintenanceRecord({
     required this.id,
@@ -28,6 +32,10 @@ class MaintenanceRecord {
     this.aiPredictionId,
     this.nextDueDate,
     this.nextDueMileage,
+    this.serviceTypeId,
+    this.source,
+    this.serviceProvider,
+    this.partsUsed = const [],
   });
 
   bool get isOverdue =>
@@ -48,6 +56,10 @@ class MaintenanceRecord {
     String? aiPredictionId,
     DateTime? nextDueDate,
     double? nextDueMileage,
+    String? serviceTypeId,
+    String? source,
+    String? serviceProvider,
+    List<String>? partsUsed,
   }) {
     return MaintenanceRecord(
       id: id ?? this.id,
@@ -62,6 +74,10 @@ class MaintenanceRecord {
       aiPredictionId: aiPredictionId ?? this.aiPredictionId,
       nextDueDate: nextDueDate ?? this.nextDueDate,
       nextDueMileage: nextDueMileage ?? this.nextDueMileage,
+      serviceTypeId: serviceTypeId ?? this.serviceTypeId,
+      source: source ?? this.source,
+      serviceProvider: serviceProvider ?? this.serviceProvider,
+      partsUsed: partsUsed ?? this.partsUsed,
     );
   }
 
@@ -78,6 +94,10 @@ class MaintenanceRecord {
       'aiPredictionId': aiPredictionId,
       'nextDueDate': nextDueDate != null ? Timestamp.fromDate(nextDueDate!) : null,
       'nextDueMileage': nextDueMileage,
+      'serviceTypeId': serviceTypeId,
+      'source': source,
+      'serviceProvider': serviceProvider,
+      'partsUsed': partsUsed.isEmpty ? null : partsUsed,
     };
   }
 
@@ -96,6 +116,13 @@ class MaintenanceRecord {
       aiPredictionId: d['aiPredictionId'] as String?,
       nextDueDate: (d['nextDueDate'] as Timestamp?)?.toDate(),
       nextDueMileage: (d['nextDueMileage'] as num?)?.toDouble(),
+      serviceTypeId: d['serviceTypeId'] as String?,
+      source: d['source'] as String?,
+      serviceProvider: d['serviceProvider'] as String?,
+      partsUsed: (d['partsUsed'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
     );
   }
 }

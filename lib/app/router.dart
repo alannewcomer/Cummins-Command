@@ -10,6 +10,7 @@ import '../features/drive_history/all_stats_screen.dart';
 import '../features/drive_history/route_detail_screen.dart';
 import '../features/ai_insights/ai_insights_screen.dart';
 import '../features/maintenance/maintenance_screen.dart';
+import '../features/maintenance/log_service_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/onboarding/bluetooth_setup_screen.dart';
 import '../features/debug/debug_log_screen.dart';
@@ -137,6 +138,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/routes/:routeId',
         builder: (context, state) => RouteDetailScreen(
           routeId: state.pathParameters['routeId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/maintenance/log-service',
+        builder: (context, state) => LogServiceScreen(
+          preselectedServiceTypeId: state.extra as String?,
         ),
       ),
       GoRoute(

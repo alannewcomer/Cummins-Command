@@ -1,5 +1,35 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Persisted OBD adapter info — stored on the Vehicle doc in Firestore.
+/// Null means no adapter has been paired yet (new setup flow).
+class ObdAdapter {
+  final String name;
+  final String address;
+  final String type; // e.g. 'OBDLink MX+', 'ELM327'
+  final DateTime pairedAt;
+
+  const ObdAdapter({
+    required this.name,
+    required this.address,
+    this.type = 'OBDLink MX+',
+    required this.pairedAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'address': address,
+        'type': type,
+        'pairedAt': Timestamp.fromDate(pairedAt),
+      };
+
+  factory ObdAdapter.fromMap(Map<String, dynamic> map) => ObdAdapter(
+        name: map['name'] as String? ?? '',
+        address: map['address'] as String? ?? '',
+        type: map['type'] as String? ?? 'OBDLink MX+',
+        pairedAt: (map['pairedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      );
+}
+
 class Vehicle {
   final String id;
   final String year;
@@ -10,6 +40,7 @@ class Vehicle {
   final String engine;
   final String transmissionType;
   final double currentOdometer;
+  final double? currentEngineHours;
   final DateTime? purchaseDate;
   final double? purchaseMileage;
   final double? towingCapacity;
@@ -18,6 +49,7 @@ class Vehicle {
   final bool isActive;
   final List<VehicleMod> modHistory;
   final Map<String, double>? baselineData;
+  final ObdAdapter? obdAdapter;
 
   const Vehicle({
     required this.id,
@@ -29,6 +61,7 @@ class Vehicle {
     this.engine = '',
     this.transmissionType = 'Automatic',
     this.currentOdometer = 0,
+    this.currentEngineHours,
     this.purchaseDate,
     this.purchaseMileage,
     this.towingCapacity,
@@ -37,10 +70,13 @@ class Vehicle {
     this.isActive = false,
     this.modHistory = const [],
     this.baselineData,
+    this.obdAdapter,
   });
 
   String get displayName => '$year $make $model${trim.isNotEmpty ? ' $trim' : ''}';
 
+  /// Copy with support for nullable obdAdapter — pass `ObdAdapter(...)` to set,
+  /// or use `clearObdAdapter: true` to explicitly null it out (forget adapter).
   Vehicle copyWith({
     String? id,
     String? year,
@@ -51,6 +87,7 @@ class Vehicle {
     String? engine,
     String? transmissionType,
     double? currentOdometer,
+    double? currentEngineHours,
     DateTime? purchaseDate,
     double? purchaseMileage,
     double? towingCapacity,
@@ -59,6 +96,8 @@ class Vehicle {
     bool? isActive,
     List<VehicleMod>? modHistory,
     Map<String, double>? baselineData,
+    ObdAdapter? obdAdapter,
+    bool clearObdAdapter = false,
   }) {
     return Vehicle(
       id: id ?? this.id,
@@ -70,6 +109,7 @@ class Vehicle {
       engine: engine ?? this.engine,
       transmissionType: transmissionType ?? this.transmissionType,
       currentOdometer: currentOdometer ?? this.currentOdometer,
+      currentEngineHours: currentEngineHours ?? this.currentEngineHours,
       purchaseDate: purchaseDate ?? this.purchaseDate,
       purchaseMileage: purchaseMileage ?? this.purchaseMileage,
       towingCapacity: towingCapacity ?? this.towingCapacity,
@@ -78,6 +118,7 @@ class Vehicle {
       isActive: isActive ?? this.isActive,
       modHistory: modHistory ?? this.modHistory,
       baselineData: baselineData ?? this.baselineData,
+      obdAdapter: clearObdAdapter ? null : (obdAdapter ?? this.obdAdapter),
     );
   }
 
@@ -91,6 +132,7 @@ class Vehicle {
       'engine': engine,
       'transmissionType': transmissionType,
       'currentOdometer': currentOdometer,
+      'currentEngineHours': currentEngineHours,
       'purchaseDate': purchaseDate != null ? Timestamp.fromDate(purchaseDate!) : null,
       'purchaseMileage': purchaseMileage,
       'towingCapacity': towingCapacity,
@@ -99,6 +141,7 @@ class Vehicle {
       'isActive': isActive,
       'modHistory': modHistory.map((m) => m.toMap()).toList(),
       'baselineData': baselineData,
+      'obdAdapter': obdAdapter?.toMap(),
     };
   }
 
@@ -114,6 +157,7 @@ class Vehicle {
       engine: data['engine'] as String? ?? '',
       transmissionType: data['transmissionType'] as String? ?? 'Automatic',
       currentOdometer: (data['currentOdometer'] as num?)?.toDouble() ?? 0,
+      currentEngineHours: (data['currentEngineHours'] as num?)?.toDouble(),
       purchaseDate: (data['purchaseDate'] as Timestamp?)?.toDate(),
       purchaseMileage: (data['purchaseMileage'] as num?)?.toDouble(),
       towingCapacity: (data['towingCapacity'] as num?)?.toDouble(),
@@ -126,6 +170,9 @@ class Vehicle {
           [],
       baselineData: (data['baselineData'] as Map<String, dynamic>?)
           ?.map((k, v) => MapEntry(k, (v as num).toDouble())),
+      obdAdapter: data['obdAdapter'] != null
+          ? ObdAdapter.fromMap(data['obdAdapter'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

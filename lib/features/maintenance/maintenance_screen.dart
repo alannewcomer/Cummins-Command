@@ -1,184 +1,170 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
-import '../../config/constants.dart';
-import '../../providers/maintenance_provider.dart';
 import '../../models/maintenance_record.dart';
-import '../../widgets/common/glass_card.dart';
+import '../../providers/maintenance_provider.dart';
+import 'widgets/urgency_hero_card.dart';
+import 'widgets/tab_chip_row.dart';
+import 'widgets/dashboard_feed.dart';
+import 'widgets/service_schedule_card.dart';
+import 'widgets/checklist_card.dart';
+import 'widgets/seasonal_card.dart';
+import 'widgets/maintenance_history_card.dart';
 
-class MaintenanceScreen extends ConsumerWidget {
+class MaintenanceScreen extends ConsumerStatefulWidget {
   const MaintenanceScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final maintenanceAsync = ref.watch(maintenanceStreamProvider);
+  ConsumerState<MaintenanceScreen> createState() => _MaintenanceScreenState();
+}
+
+class _MaintenanceScreenState extends ConsumerState<MaintenanceScreen> {
+  bool _bootstrapped = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Bootstrap schedules on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrapSchedules();
+    });
+  }
+
+  Future<void> _bootstrapSchedules() async {
+    if (_bootstrapped) return;
+    _bootstrapped = true;
+    try {
+      await ref.read(maintenanceRepositoryProvider).initializeSchedules();
+    } catch (_) {
+      // Bootstrap may fail if user/vehicle not ready yet — retry on next build
+      _bootstrapped = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentTab = ref.watch(maintenanceTabProvider);
+
+    // Re-attempt bootstrap when schedules stream resolves empty.
+    // Covers the case where vehicle wasn't ready during initState.
+    final schedulesAsync = ref.watch(serviceSchedulesProvider);
+    if (schedulesAsync.hasValue && schedulesAsync.value!.isEmpty) {
+      _bootstrapSchedules();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('Maintenance Log', style: AppTypography.displaySmall),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('PDF export coming soon')),
-              );
-            },
-          ),
-        ],
-      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
-        onPressed: () => _showAddDialog(context, ref),
+        onPressed: () => _showActionSheet(context),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      body: maintenanceAsync.when(
-        data: (records) => records.isEmpty
-            ? _buildEmptyState()
-            : _buildMaintenanceList(context, records),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => _buildEmptyState(),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.build_outlined, size: 64, color: AppColors.textTertiary.withValues(alpha: 0.3)),
-          const SizedBox(height: AppSpacing.lg),
-          Text('No Maintenance Records', style: AppTypography.displaySmall),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Tap + to add your first service record',
-            style: AppTypography.bodyMedium,
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
+          SliverAppBar(
+            floating: true,
+            snap: true,
+            backgroundColor: AppColors.background,
+            title: Text('Service Center', style: AppTypography.displaySmall),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('PDF export coming soon')),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildMaintenanceList(BuildContext context, List<MaintenanceRecord> records) {
-    // Split into upcoming and completed
-    final upcoming = records.where((r) => !r.isCompleted).toList();
-    final completed = records.where((r) => r.isCompleted).toList();
-
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        if (upcoming.isNotEmpty) ...[
-          const SectionHeader(title: 'Upcoming', padding: EdgeInsets.zero),
-          const SizedBox(height: AppSpacing.sm),
-          ...upcoming.map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _MaintenanceCard(record: r, isUpcoming: true),
-              )),
-        ],
-        if (completed.isNotEmpty) ...[
-          SectionHeader(
-            title: 'Service History',
-            padding: EdgeInsets.only(
-              top: upcoming.isNotEmpty ? AppSpacing.lg : 0,
+          // Urgency Hero Card
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+              child: UrgencyHeroCard(),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ...completed.map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: _MaintenanceCard(record: r, isUpcoming: false),
-              )),
+
+          // Tab Chip Row
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(top: AppSpacing.sm, bottom: AppSpacing.sm),
+              child: TabChipRow(),
+            ),
+          ),
+
+          // Tab-specific content
+          _buildTabContent(currentTab),
         ],
-      ],
+      ),
     );
   }
 
-  void _showAddDialog(BuildContext context, WidgetRef ref) {
-    String? selectedCategory;
-    final titleController = TextEditingController();
-    final costController = TextEditingController();
+  Widget _buildTabContent(MaintenanceTab tab) {
+    return switch (tab) {
+      MaintenanceTab.dashboard => const DashboardFeed(),
+      MaintenanceTab.schedule => const ScheduleTab(),
+      MaintenanceTab.checklists => const ChecklistsTab(),
+      MaintenanceTab.seasonal => const SeasonalTab(),
+      MaintenanceTab.history => const HistoryTab(),
+    };
+  }
 
+  void _showActionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: EdgeInsets.only(
-            left: AppSpacing.xl,
-            right: AppSpacing.xl,
-            top: AppSpacing.xl,
-            bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl,
-          ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceBorder,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceBorder,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Add Service Record', style: AppTypography.displaySmall),
-              const SizedBox(height: AppSpacing.xl),
-              // Category dropdown
-              DropdownButtonFormField<String>(
-                initialValue: selectedCategory,
-                dropdownColor: AppColors.surface,
-                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: AppConstants.maintenanceCategories.map((c) {
-                  return DropdownMenuItem(value: c, child: Text(c));
-                }).toList(),
-                onChanged: (val) => setState(() => selectedCategory = val),
+              _ActionTile(
+                icon: Icons.build_outlined,
+                title: 'Log Service',
+                subtitle: 'Record a completed maintenance service',
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/maintenance/log-service');
+                },
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: titleController,
-                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
-                decoration: const InputDecoration(labelText: 'Description'),
+              const Divider(height: 1),
+              _ActionTile(
+                icon: Icons.checklist_outlined,
+                title: 'Run Checklist',
+                subtitle: 'Start a pre-trip or storage checklist',
+                onTap: () {
+                  Navigator.pop(context);
+                  ref.read(maintenanceTabProvider.notifier)
+                      .set(MaintenanceTab.checklists);
+                },
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: costController,
-                keyboardType: TextInputType.number,
-                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
-                decoration: const InputDecoration(labelText: 'Cost (\$)', prefixText: '\$ '),
-              ),
-              const SizedBox(height: AppSpacing.xxl),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (selectedCategory != null) {
-                      final record = MaintenanceRecord(
-                        id: '',
-                        vehicleId: '',
-                        category: selectedCategory!,
-                        title: titleController.text.isNotEmpty
-                            ? titleController.text
-                            : selectedCategory!,
-                        date: DateTime.now(),
-                        cost: double.tryParse(costController.text),
-                        isCompleted: true,
-                      );
-                      ref.read(maintenanceRepositoryProvider).add(record);
-                      Navigator.pop(context);
-                    }
-                  },
-                  child: const Text('Save Record'),
-                ),
+              const Divider(height: 1),
+              _ActionTile(
+                icon: Icons.note_add_outlined,
+                title: 'Quick Note',
+                subtitle: 'Add a quick maintenance note',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showQuickNoteDialog(context);
+                },
               ),
             ],
           ),
@@ -186,76 +172,98 @@ class MaintenanceScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _MaintenanceCard extends StatelessWidget {
-  final MaintenanceRecord record;
-  final bool isUpcoming;
+  void _showQuickNoteDialog(BuildContext context) {
+    final titleController = TextEditingController();
+    final notesController = TextEditingController();
 
-  const _MaintenanceCard({required this.record, required this.isUpcoming});
-
-  @override
-  Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM d, yyyy');
-    final color = isUpcoming ? AppColors.warning : AppColors.success;
-    final iconData = _categoryIcon(record.category);
-
-    return GlassCard(
-      borderColor: isUpcoming ? AppColors.warning.withValues(alpha: 0.3) : null,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quick Note'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textPrimary),
+              decoration: const InputDecoration(labelText: 'Title'),
             ),
-            child: Icon(iconData, size: 20, color: color),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: notesController,
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textPrimary),
+              decoration: const InputDecoration(labelText: 'Notes'),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.title,
-                  style: AppTypography.labelLarge.copyWith(color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${record.category} • ${dateFormat.format(record.date)}',
-                  style: AppTypography.bodySmall,
-                ),
-              ],
-            ),
+          ElevatedButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty) {
+                final record = MaintenanceRecord(
+                  id: '',
+                  vehicleId: '',
+                  category: 'Other',
+                  title: titleController.text,
+                  description: notesController.text.isEmpty
+                      ? null
+                      : notesController.text,
+                  date: DateTime.now(),
+                  isCompleted: true,
+                  source: 'manual',
+                );
+                ref.read(maintenanceRepositoryProvider).add(record);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
           ),
-          if (record.cost != null)
-            Text(
-              '\$${record.cost!.toStringAsFixed(0)}',
-              style: AppTypography.dataSmall.copyWith(color: AppColors.dataAccent),
-            ),
         ],
       ),
     );
   }
+}
 
-  IconData _categoryIcon(String category) {
-    return switch (category) {
-      'Oil Change' => Icons.oil_barrel,
-      'Fuel Filter' => Icons.filter_alt,
-      'Air Filter' => Icons.air,
-      'Tire Rotation' => Icons.tire_repair,
-      'Brake Service' => Icons.disc_full,
-      'Battery' => Icons.battery_full,
-      'DEF Fluid' => Icons.water_drop,
-      'DPF Cleaning' => Icons.cleaning_services,
-      'Coolant Flush' => Icons.thermostat,
-      _ => Icons.build,
-    };
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: AppColors.primaryDim,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 20, color: AppColors.primary),
+      ),
+      title: Text(title,
+          style: AppTypography.labelLarge
+              .copyWith(color: AppColors.textPrimary)),
+      subtitle: Text(subtitle, style: AppTypography.bodySmall),
+      onTap: onTap,
+      contentPadding:
+          const EdgeInsets.symmetric(vertical: AppSpacing.sm, horizontal: 0),
+    );
   }
 }

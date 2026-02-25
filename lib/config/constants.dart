@@ -76,6 +76,9 @@ class AppConstants {
   static const datapointsSubcollection = 'datapoints';
   static const dashboardsSubcollection = 'dashboards';
   static const maintenanceSubcollection = 'maintenance';
+  static const serviceSchedulesSubcollection = 'serviceSchedules';
+  static const checklistSessionsSubcollection = 'checklistSessions';
+  static const seasonalTasksSubcollection = 'seasonalTasks';
   static const sharingSubcollection = 'sharing';
   static const aiJobsSubcollection = 'aiJobs';
   static const routesSubcollection = 'routes';
