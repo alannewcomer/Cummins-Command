@@ -52,6 +52,7 @@ class _ChecklistGroup extends ConsumerStatefulWidget {
 
 class _ChecklistGroupState extends ConsumerState<_ChecklistGroup> {
   bool _expanded = false;
+  bool _starting = false;
 
   @override
   void initState() {
@@ -149,9 +150,13 @@ class _ChecklistGroupState extends ConsumerState<_ChecklistGroup> {
                   child: SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () => _startChecklist(ref, template),
-                      icon: const Icon(Icons.play_arrow, size: 18),
-                      label: const Text('Start Checklist'),
+                      onPressed: _starting ? null : () => _startChecklist(ref, template),
+                      icon: _starting
+                          ? const SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.play_arrow, size: 18),
+                      label: Text(_starting ? 'Starting...' : 'Start Checklist'),
                     ),
                   ),
                 )
@@ -200,16 +205,41 @@ class _ChecklistGroupState extends ConsumerState<_ChecklistGroup> {
   }
 
   Future<void> _startChecklist(WidgetRef ref, ChecklistTemplate template) async {
-    final vehicle = ref.read(activeVehicleProvider);
-    final sessionId = await ref.read(maintenanceRepositoryProvider).startChecklist(
-      checklistTypeId: template.id,
-      itemIds: template.items.map((i) => i.id).toList(),
-      odometerReading: vehicle?.currentOdometer,
-    );
-    // The stream will rebuild with the new session, and didUpdateWidget
-    // will auto-expand. But if that doesn't fire fast enough, force expand.
-    if (sessionId != null && mounted) {
-      setState(() => _expanded = true);
+    setState(() => _starting = true);
+    try {
+      final vehicle = ref.read(activeVehicleProvider);
+      if (vehicle == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No vehicle selected. Please set up your vehicle first.')),
+          );
+        }
+        return;
+      }
+      final sessionId = await ref.read(maintenanceRepositoryProvider).startChecklist(
+        checklistTypeId: template.id,
+        itemIds: template.items.map((i) => i.id).toList(),
+        odometerReading: vehicle.currentOdometer,
+      );
+      if (sessionId == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start checklist. Please try again.')),
+        );
+        return;
+      }
+      // The stream will rebuild with the new session, and didUpdateWidget
+      // will auto-expand. But if that doesn't fire fast enough, force expand.
+      if (sessionId != null && mounted) {
+        setState(() => _expanded = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting checklist: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _starting = false);
     }
   }
 

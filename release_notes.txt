@@ -1,0 +1,20 @@
+v1.0.1 — Data Explorer AI Chat & Service Center
+
+NEW FEATURES
+- Inline AI Chat in Data Explorer: Tap "Ask AI" to open a bottom sheet chat that analyzes your actual on-screen data — selected sensors, time range, and computed stats. Powered by Gemini 3 Flash Preview for fast, data-aware responses. Ask follow-up questions while keeping the chart visible above.
+- Service Center: Full maintenance hub with scheduled services, pre-trip/post-trip checklists, and seasonal task tracking.
+- PID Reference Guide: Browse all supported OBD2 and Cummins-specific parameters with descriptions, units, and normal ranges from Settings.
+
+IMPROVEMENTS
+- Command Center: Refreshed layout and data presentation.
+- Drive History: Improved drive detail views and navigation.
+- Bluetooth: More reliable connection handling and state management.
+- Data Explorer: Better chart interactions and parameter overlay UX.
+
+UNDER THE HOOD
+- Code quality cleanup: removed dead code, improved type safety, consolidated duplicate logic.
+- Hardened security: validated AI JSON responses, sanitized Bluetooth commands, safe type casting.
+- Dev logs toggle: control Firestore dev log uploads from Settings.
+- Parquet conversion support for optimized sensor data storage.
+- Fixed foreground service crashes and Bluetooth plugin cast errors.
+- Improved battery drain and reconnect reliability for never-miss-a-trip recording.

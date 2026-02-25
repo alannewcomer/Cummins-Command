@@ -119,29 +119,38 @@ class DashboardFeed extends ConsumerWidget {
                       .set(MaintenanceTab.checklists),
                 ),
               ),
-            // Empty state
-            if (overdue.isEmpty &&
-                dueSoon.isEmpty &&
-                activeSeasonalGroups.isEmpty &&
-                lastChecklist == null)
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.xxxl),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 48,
-                          color: AppColors.success.withValues(alpha: 0.5)),
-                      const SizedBox(height: AppSpacing.md),
-                      Text('All caught up!',
-                          style: AppTypography.displaySmall),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text('No services due. Check back later.',
-                          style: AppTypography.bodyMedium),
-                    ],
-                  ),
-                ),
-              ),
+            // Next Up — show upcoming services when nothing is overdue/due-soon
+            if (overdue.isEmpty && dueSoon.isEmpty) ...[
+              () {
+                final upcoming = schedules
+                    .where((s) => s.isEnabled &&
+                        !s.isOverdue(odometer, currentHours: hours) &&
+                        !s.isDueSoon(odometer, currentHours: hours))
+                    .toList()
+                  ..sort((a, b) =>
+                      b.progressPercent(odometer, currentHours: hours)
+                          .compareTo(a.progressPercent(odometer, currentHours: hours)));
+                final top = upcoming.take(5).toList();
+                if (top.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+                      child: Text('Next Up',
+                          style: AppTypography.labelLarge
+                              .copyWith(color: AppColors.textSecondary)),
+                    ),
+                    ...top.map((s) => _NextUpCard(
+                          schedule: s,
+                          odometer: odometer,
+                          engineHours: hours,
+                        )),
+                  ],
+                );
+              }(),
+            ],
             const SizedBox(height: AppSpacing.xxxl),
           ]),
         );
@@ -287,6 +296,86 @@ class _SeasonalNudgeCard extends StatelessWidget {
               Icon(Icons.check_circle, size: 20, color: AppColors.success)
             else
               Icon(Icons.chevron_right, size: 20, color: AppColors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NextUpCard extends StatelessWidget {
+  final ServiceSchedule schedule;
+  final double odometer;
+  final double engineHours;
+
+  const _NextUpCard({
+    required this.schedule,
+    required this.odometer,
+    required this.engineHours,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = schedule.progressPercent(odometer, currentHours: engineHours);
+    final template = getServiceType(schedule.serviceTypeId);
+    final icon = template?.icon ?? Icons.build;
+    final trigger = schedule.leadingTrigger(odometer, currentHours: engineHours);
+
+    // Build the "due at" text
+    String dueText = '';
+    switch (trigger) {
+      case UrgencyTrigger.miles:
+        final next = schedule.nextDueMiles(odometer);
+        if (next != null) {
+          final remaining = (next - odometer).round();
+          dueText = '${NumberFormat('#,##0').format(remaining)} mi remaining';
+        }
+      case UrgencyTrigger.time:
+        final next = schedule.nextDueDate;
+        if (next != null) {
+          final days = next.difference(DateTime.now()).inDays;
+          dueText = days > 60
+              ? '${(days / 30).round()} months remaining'
+              : '$days days remaining';
+        }
+      case UrgencyTrigger.hours:
+        final next = schedule.nextDueHours;
+        if (next != null) {
+          final remaining = (next - engineHours).round();
+          dueText = '$remaining hrs remaining';
+        }
+      case UrgencyTrigger.none:
+        break;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xs,
+      ),
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.textSecondary),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(schedule.name,
+                      style: AppTypography.labelLarge
+                          .copyWith(color: AppColors.textPrimary)),
+                  if (dueText.isNotEmpty)
+                    Text(dueText, style: AppTypography.bodySmall),
+                ],
+              ),
+            ),
+            Text(
+              '${(progress * 100).round()}%',
+              style: AppTypography.dataSmall
+                  .copyWith(color: AppColors.textTertiary),
+            ),
           ],
         ),
       ),

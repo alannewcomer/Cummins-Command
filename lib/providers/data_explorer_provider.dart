@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../config/constants.dart';
 import '../config/pid_config.dart';
 import '../models/datapoint.dart';
 import '../services/timeseries_file.dart';
+import 'ai_provider.dart';
 import 'vehicle_provider.dart';
 
 /// Selected parameters for the data explorer.
@@ -210,6 +212,125 @@ Future<void> _loadFromFirestore(
       }
     }
   }
+}
+
+// ─── Explorer AI Chat Providers ───
+
+/// Chat history isolated to the Data Explorer AI sheet.
+class ExplorerChatHistoryNotifier extends Notifier<List<ChatMessage>> {
+  @override
+  List<ChatMessage> build() => [];
+
+  void addUserMessage(String content) {
+    state = [...state, ChatMessage(role: 'user', content: content)];
+  }
+
+  void addAiMessage(String content) {
+    state = [...state, ChatMessage(role: 'ai', content: content)];
+  }
+
+  void clear() => state = [];
+}
+
+final explorerChatHistoryProvider =
+    NotifierProvider<ExplorerChatHistoryNotifier, List<ChatMessage>>(
+        ExplorerChatHistoryNotifier.new);
+
+/// Whether the explorer AI chat is generating a response.
+class ExplorerAiLoadingNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void setLoading(bool value) => state = value;
+}
+
+final explorerAiLoadingProvider =
+    NotifierProvider<ExplorerAiLoadingNotifier, bool>(
+        ExplorerAiLoadingNotifier.new);
+
+/// Build a data context map for the explorer AI chat.
+///
+/// Computes per-param stats (min, max, avg, median, stdDev, count) and
+/// downsamples to ~50 points per param to keep token usage reasonable.
+Map<String, dynamic> buildExplorerDataContext({
+  required Map<String, List<MapEntry<DateTime, double>>> data,
+  required List<String> selectedParams,
+  required TimeRange timeRange,
+}) {
+  String presetLabel(TimeRangePreset preset) {
+    switch (preset) {
+      case TimeRangePreset.thisDrive: return 'This Drive';
+      case TimeRangePreset.lastDrive: return 'Last Drive';
+      case TimeRangePreset.days7: return '7D';
+      case TimeRangePreset.days30: return '30D';
+      case TimeRangePreset.days90: return '90D';
+      case TimeRangePreset.year1: return '1Y';
+      case TimeRangePreset.allTime: return 'All';
+      case TimeRangePreset.custom: return 'Custom';
+    }
+  }
+
+  final parameters = <String, dynamic>{};
+
+  for (final paramId in selectedParams) {
+    final points = data[paramId] ?? [];
+    if (points.isEmpty) continue;
+
+    final pid = PidRegistry.get(paramId);
+    final values = points.map((e) => e.value).toList()..sort();
+    final count = values.length;
+    final min = values.first;
+    final max = values.last;
+    final sum = values.fold<double>(0, (s, v) => s + v);
+    final avg = sum / count;
+
+    // Median
+    final median = count.isOdd
+        ? values[count ~/ 2]
+        : (values[count ~/ 2 - 1] + values[count ~/ 2]) / 2;
+
+    // Standard deviation
+    final variance = values.fold<double>(0, (s, v) => s + (v - avg) * (v - avg)) / count;
+    final stdDev = math.sqrt(variance);
+
+    // Downsample to ~50 evenly-spaced points
+    const maxSamples = 50;
+    final samples = <Map<String, dynamic>>[];
+    if (points.length <= maxSamples) {
+      for (final p in points) {
+        samples.add({'t': p.key.toIso8601String(), 'v': double.parse(p.value.toStringAsFixed(1))});
+      }
+    } else {
+      final step = points.length / maxSamples;
+      for (var i = 0; i < maxSamples; i++) {
+        final idx = (i * step).floor();
+        final p = points[idx];
+        samples.add({'t': p.key.toIso8601String(), 'v': double.parse(p.value.toStringAsFixed(1))});
+      }
+    }
+
+    parameters[paramId] = {
+      'name': pid?.name ?? paramId,
+      'unit': pid?.unit ?? '',
+      'stats': {
+        'min': double.parse(min.toStringAsFixed(2)),
+        'max': double.parse(max.toStringAsFixed(2)),
+        'avg': double.parse(avg.toStringAsFixed(2)),
+        'median': double.parse(median.toStringAsFixed(2)),
+        'stdDev': double.parse(stdDev.toStringAsFixed(2)),
+        'count': count,
+      },
+      'samples': samples,
+    };
+  }
+
+  return {
+    'timeRange': {
+      'start': timeRange.start.toIso8601String(),
+      'end': timeRange.end.toIso8601String(),
+      'preset': presetLabel(timeRange.preset),
+    },
+    'parameters': parameters,
+  };
 }
 
 /// Searchable PID list for parameter picker.

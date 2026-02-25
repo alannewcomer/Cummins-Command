@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 
 import '../../app/theme.dart';
 import '../../config/pid_config.dart';
+import '../../providers/ai_provider.dart';
 import '../../providers/data_explorer_provider.dart';
+import '../../widgets/ai/ai_chat_bubble.dart';
 
 /// Parameter colors for multi-overlay chart.
 const _paramColors = <Color>[
@@ -177,7 +178,7 @@ class _DataExplorerScreenState extends ConsumerState<DataExplorerScreen>
           ? _AskAiFab(
               onTap: () {
                 HapticFeedback.mediumImpact();
-                context.go('/ai');
+                _showExplorerAiSheet(context);
               },
             )
           : null,
@@ -190,6 +191,15 @@ class _DataExplorerScreenState extends ConsumerState<DataExplorerScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const _ParameterPickerSheet(),
+    );
+  }
+
+  void _showExplorerAiSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _ExplorerAiSheet(),
     );
   }
 }
@@ -1188,5 +1198,389 @@ class _ParameterPickerSheet extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+// ─── Explorer AI Chat Sheet ───
+
+class _ExplorerAiSheet extends ConsumerStatefulWidget {
+  const _ExplorerAiSheet();
+
+  @override
+  ConsumerState<_ExplorerAiSheet> createState() => _ExplorerAiSheetState();
+}
+
+class _ExplorerAiSheetState extends ConsumerState<_ExplorerAiSheet> {
+  final _controller = TextEditingController();
+  final _scrollController = ScrollController();
+
+  static const _suggestions = [
+    'Any anomalies in this data?',
+    'What trends do you see?',
+    'Are these values normal?',
+    'Summarize this data',
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _sendMessage(String message) async {
+    if (message.trim().isEmpty) return;
+    _controller.clear();
+
+    final explorerData = ref.read(explorerDataProvider);
+    Map<String, List<MapEntry<DateTime, double>>>? data;
+    explorerData.when(
+      data: (d) => data = d,
+      loading: () {},
+      error: (_, __) {},
+    );
+    if (data == null || data!.isEmpty) return;
+
+    final selectedParams = ref.read(selectedParamsProvider);
+    final timeRange = ref.read(timeRangeProvider);
+
+    ref.read(explorerChatHistoryProvider.notifier).addUserMessage(message);
+    ref.read(explorerAiLoadingProvider.notifier).setLoading(true);
+    _scrollToBottom();
+
+    try {
+      final dataContext = buildExplorerDataContext(
+        data: data!,
+        selectedParams: selectedParams,
+        timeRange: timeRange,
+      );
+
+      // Build history (exclude the message we just added — it's the current turn)
+      final history = ref.read(explorerChatHistoryProvider);
+      final historyMaps = history
+          .sublist(0, history.length - 1)
+          .map((m) => {'role': m.role == 'ai' ? 'model' : 'user', 'content': m.content})
+          .toList();
+
+      final aiService = ref.read(aiServiceProvider);
+      final response = await aiService.explorerChat(
+        message,
+        historyMaps,
+        dataContext,
+      );
+
+      ref.read(explorerChatHistoryProvider.notifier).addAiMessage(response);
+    } catch (e) {
+      ref.read(explorerChatHistoryProvider.notifier).addAiMessage(
+        'Sorry, I couldn\'t analyze the data right now. Please try again.',
+      );
+    } finally {
+      ref.read(explorerAiLoadingProvider.notifier).setLoading(false);
+      _scrollToBottom();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chatHistory = ref.watch(explorerChatHistoryProvider);
+    final isLoading = ref.watch(explorerAiLoadingProvider);
+    final selectedParams = ref.watch(selectedParamsProvider);
+    final timeRange = ref.watch(timeRangeProvider);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      builder: (context, sheetScrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            border: Border(
+              top: BorderSide(color: AppColors.surfaceBorder),
+              left: BorderSide(color: AppColors.surfaceBorder),
+              right: BorderSide(color: AppColors.surfaceBorder),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.md),
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Header + context banner
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.md, AppSpacing.md, 0,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            AppColors.primary,
+                            AppColors.primary.withValues(alpha: 0.5),
+                          ],
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.diamond_outlined,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Data Explorer AI',
+                            style: AppTypography.labelLarge.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            _buildContextLabel(selectedParams, timeRange),
+                            style: AppTypography.labelSmall.copyWith(
+                              color: AppColors.primary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (chatHistory.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        color: AppColors.textTertiary,
+                        onPressed: () {
+                          ref.read(explorerChatHistoryProvider.notifier).clear();
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      color: AppColors.textSecondary,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // Chat area
+              Expanded(
+                child: chatHistory.isEmpty
+                    ? _buildEmptyState()
+                    : _buildChatList(chatHistory, isLoading),
+              ),
+
+              // Input bar
+              Container(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  AppSpacing.sm + bottomInset,
+                ),
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  border: Border(
+                    top: BorderSide(color: AppColors.surfaceBorder),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        style: AppTypography.bodyMedium.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Ask about this data...',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.md,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.round),
+                            borderSide: const BorderSide(color: AppColors.surfaceBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.round),
+                            borderSide: const BorderSide(color: AppColors.surfaceBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.round),
+                            borderSide: const BorderSide(color: AppColors.primary),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.surfaceLight,
+                        ),
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: isLoading ? null : _sendMessage,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isLoading
+                            ? AppColors.surfaceLight
+                            : AppColors.primary,
+                      ),
+                      child: IconButton(
+                        icon: isLoading
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: const AlwaysStoppedAnimation(
+                                    AppColors.textTertiary,
+                                  ),
+                                ),
+                              )
+                            : const Icon(Icons.send, size: 18),
+                        color: Colors.white,
+                        onPressed: isLoading
+                            ? null
+                            : () => _sendMessage(_controller.text),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        children: [
+          const SizedBox(height: AppSpacing.xxl),
+          Icon(
+            Icons.auto_awesome,
+            size: 36,
+            color: AppColors.primary.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Ask about your data',
+            style: AppTypography.labelLarge.copyWith(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'AI can analyze the parameters and\ntime range you\'ve selected',
+            style: AppTypography.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            alignment: WrapAlignment.center,
+            children: _suggestions.map((s) {
+              return ActionChip(
+                label: Text(
+                  s,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.dataAccent,
+                  ),
+                ),
+                backgroundColor: AppColors.dataAccent.withValues(alpha: 0.08),
+                side: BorderSide(
+                  color: AppColors.dataAccent.withValues(alpha: 0.25),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.round),
+                ),
+                onPressed: () => _sendMessage(s),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatList(List<ChatMessage> messages, bool isLoading) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      itemCount: messages.length + (isLoading ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == messages.length) {
+          // Loading indicator
+          return const AiChatBubble(
+            message: '',
+            isUser: false,
+            isLoading: true,
+          );
+        }
+        final msg = messages[index];
+        return AiChatBubble(
+          message: msg.content,
+          isUser: msg.role == 'user',
+        );
+      },
+    );
+  }
+
+  String _buildContextLabel(List<String> params, TimeRange range) {
+    final paramNames = params.map((id) {
+      final pid = PidRegistry.get(id);
+      return pid?.shortName ?? id.toUpperCase();
+    }).join(', ');
+
+    final presetLabels = {
+      TimeRangePreset.thisDrive: 'This Drive',
+      TimeRangePreset.lastDrive: 'Last Drive',
+      TimeRangePreset.days7: 'Last 7 Days',
+      TimeRangePreset.days30: 'Last 30 Days',
+      TimeRangePreset.days90: 'Last 90 Days',
+      TimeRangePreset.year1: 'Last Year',
+      TimeRangePreset.allTime: 'All Time',
+      TimeRangePreset.custom: 'Custom Range',
+    };
+    final rangeLabel = presetLabels[range.preset] ?? 'Custom';
+    return '$paramNames | $rangeLabel';
   }
 }

@@ -88,6 +88,7 @@ class AppConstants {
   // AI
   static const geminiProModel = 'gemini-3.1-pro-preview';
   static const geminiFlashModel = 'gemini-2.5-flash';
+  static const geminiExplorerFlashModel = 'gemini-3-flash-preview';
   static const aiStatusStripRefreshInterval = Duration(seconds: 10);
   static const maxChatHistory = 50;
 

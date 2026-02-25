@@ -205,8 +205,14 @@ class MaintenanceRepository {
     if (ref == null) return;
 
     final snap = await ref.limit(1).get();
-    if (snap.docs.isNotEmpty) return; // Already initialized
+    if (snap.docs.isNotEmpty) {
+      // Already initialized — seed baseline for any docs missing lastServiceMiles
+      await _seedBaselineIfNeeded(ref);
+      return;
+    }
 
+    // First-time bootstrap: create all schedules with baseline "new truck" values
+    final now = DateTime.now();
     final batch = _db.batch();
     for (int i = 0; i < kServiceTypes.length; i++) {
       final t = kServiceTypes[i];
@@ -219,9 +225,31 @@ class MaintenanceRepository {
         intervalMiles: t.defaultIntervalMiles,
         intervalMonths: t.defaultIntervalMonths,
         intervalHours: t.defaultIntervalHours,
+        lastServiceMiles: 0,
+        lastServiceDate: now,
+        lastServiceHours: t.defaultIntervalHours != null ? 0 : null,
         isEnabled: true,
         sortOrder: i,
       ).toFirestore());
+    }
+    await batch.commit();
+  }
+
+  /// Backfill baseline values for schedule docs that were created without them.
+  Future<void> _seedBaselineIfNeeded(CollectionReference ref) async {
+    final snap = await ref.where('lastServiceMiles', isNull: true).get();
+    if (snap.docs.isEmpty) return;
+
+    final now = DateTime.now();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      final d = doc.data() as Map<String, dynamic>? ?? {};
+      final hasHours = d['intervalHours'] != null;
+      batch.update(doc.reference, {
+        'lastServiceMiles': 0,
+        'lastServiceDate': Timestamp.fromDate(now),
+        if (hasHours) 'lastServiceHours': 0,
+      });
     }
     await batch.commit();
   }

@@ -1,7 +1,7 @@
 name: myapp
 description: "Cummins Command V2 — AI-First Diesel Intelligence Platform"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.9.0

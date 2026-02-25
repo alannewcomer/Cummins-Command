@@ -16,6 +16,7 @@ import 'package:myapp/models/vehicle.dart';
 class AiService {
   late final GenerativeModel _flashModel;
   late final GenerativeModel _proModel;
+  late final GenerativeModel _explorerFlashModel;
 
   static String _buildSystemInstruction(Vehicle? vehicle) {
     final String vehicleDesc;
@@ -69,6 +70,26 @@ values when available.
         temperature: 0.7,
         maxOutputTokens: 4096,
         topP: 0.95,
+      ),
+    );
+
+    _explorerFlashModel = ai.generativeModel(
+      model: AppConstants.geminiExplorerFlashModel,
+      systemInstruction: Content.system('''
+$systemInstruction
+
+You are analyzing time-series sensor data from the vehicle's Data Explorer.
+The user has selected specific parameters and a time range. You will receive
+aggregated statistics (min, max, avg, median, count) and ~50 downsampled
+data points per parameter so you can identify trends.
+
+Be concise but specific — reference actual values. Use plain text, no markdown
+headers. Keep responses under 200 words unless the user asks for detail.
+'''),
+      generationConfig: GenerationConfig(
+        temperature: 0.4,
+        maxOutputTokens: 1024,
+        topP: 0.9,
       ),
     );
   }
@@ -372,6 +393,64 @@ Use 3 columns, up to 4 rows. Prioritize the most relevant parameters.
       return response.text?.trim() ?? 'I could not generate a response.';
     } catch (e) {
       throw AiServiceException('Chat failed: $e');
+    }
+  }
+
+  // ─── Explorer Chat (Fast, Data-Aware) ───
+
+  /// Chat about Data Explorer data using the Flash Preview model.
+  ///
+  /// [message] is the user's current question.
+  /// [history] is prior conversation turns.
+  /// [dataContext] is the aggregated stats + downsampled series from
+  /// [buildExplorerDataContext].
+  Future<String> explorerChat(
+    String message,
+    List<Map<String, String>> history,
+    Map<String, dynamic> dataContext,
+  ) async {
+    try {
+      final contextJson = const JsonEncoder.withIndent('  ').convert(dataContext);
+      final contents = <Content>[];
+
+      // First turn: inject the data context so Gemini sees it
+      contents.add(Content.text(
+        'Here is the vehicle sensor data I\'m looking at:\n$contextJson',
+      ));
+      contents.add(Content('model', [
+        TextPart('I can see your data. What would you like to know?'),
+      ]));
+
+      // Replay conversation history
+      for (final msg in history) {
+        final role = msg['role'] ?? 'user';
+        final content = msg['content'] ?? '';
+        if (role == 'user') {
+          contents.add(Content.text(content));
+        } else {
+          contents.add(Content('model', [TextPart(content)]));
+        }
+      }
+
+      // Add current message
+      contents.add(Content.text(message));
+
+      // Limit history to avoid token overflow
+      if (contents.length > AppConstants.maxChatHistory) {
+        // Always keep the first 2 (data context pair)
+        final tail = contents.sublist(2);
+        if (tail.length > AppConstants.maxChatHistory - 2) {
+          tail.removeRange(0, tail.length - (AppConstants.maxChatHistory - 2));
+        }
+        contents
+          ..removeRange(2, contents.length)
+          ..addAll(tail);
+      }
+
+      final response = await _explorerFlashModel.generateContent(contents);
+      return response.text?.trim() ?? 'I could not generate a response.';
+    } catch (e) {
+      throw AiServiceException('Explorer chat failed: $e');
     }
   }
 
