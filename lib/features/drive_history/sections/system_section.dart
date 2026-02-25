@@ -7,8 +7,9 @@ import '../../../widgets/common/glass_card.dart';
 /// System Health section: Battery, Oil Pressure, Crankcase, Coolant Level.
 class SystemSection extends StatelessWidget {
   final DriveStats stats;
+  final void Function(String paramId)? onParamTap;
 
-  const SystemSection({super.key, required this.stats});
+  const SystemSection({super.key, required this.stats, this.onParamTap});
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +57,7 @@ class SystemSection extends StatelessWidget {
                         color: stats.minBatteryVoltage < 11.5
                             ? AppColors.warning
                             : AppColors.success,
+                        onTap: onParamTap != null ? () => onParamTap!('batteryVoltage') : null,
                       ),
                     if (hasOil)
                       _SystemTile(
@@ -68,6 +70,7 @@ class SystemSection extends StatelessWidget {
                         color: stats.minOilPressure < 25
                             ? AppColors.warning
                             : AppColors.success,
+                        onTap: onParamTap != null ? () => onParamTap!('oilPressure') : null,
                       ),
                   ],
                 ),
@@ -85,6 +88,7 @@ class SystemSection extends StatelessWidget {
                           color: stats.avgCrankcasePressure > 7
                               ? AppColors.warning
                               : AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('crankcasePressure') : null,
                         ),
                       if (hasCoolantLevel)
                         _SystemTile(
@@ -97,6 +101,7 @@ class SystemSection extends StatelessWidget {
                           color: stats.coolantLevelEnd < 50
                               ? AppColors.warning
                               : AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('coolantLevel') : null,
                         ),
                     ],
                   ),
@@ -116,6 +121,7 @@ class _SystemTile extends StatelessWidget {
   final String primary;
   final String secondary;
   final Color color;
+  final VoidCallback? onTap;
 
   const _SystemTile({
     required this.icon,
@@ -123,43 +129,48 @@ class _SystemTile extends StatelessWidget {
     required this.primary,
     required this.secondary,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.1),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.1),
+              ),
+              child: Icon(icon, size: 16, color: color),
             ),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: AppTypography.labelSmall),
-                Text(
-                  primary,
-                  style: AppTypography.dataSmall.copyWith(
-                    color: color,
-                    fontSize: 13,
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.labelSmall),
+                  Text(
+                    primary,
+                    style: AppTypography.dataSmall.copyWith(
+                      color: color,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                Text(
-                  secondary,
-                  style: AppTypography.labelSmall.copyWith(fontSize: 9),
-                ),
-              ],
+                  Text(
+                    secondary,
+                    style: AppTypography.labelSmall.copyWith(fontSize: 9),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -8,6 +8,7 @@ import '../services/drive_recorder.dart';
 import '../services/obd_service.dart';
 import 'auth_provider.dart';
 import 'bluetooth_provider.dart';
+import 'bluetooth_ux_provider.dart';
 import 'drives_provider.dart';
 import 'location_provider.dart';
 import 'vehicle_provider.dart';
@@ -120,10 +121,19 @@ final obdLifecycleProvider = Provider<void>((ref) {
 
   // Auto-connect to last known adapter on init (covers app restart).
   // Fire-and-forget — if no saved address or connect fails, no harm done.
+  // Falls back to Firestore adapter address if SharedPreferences is empty/stale
+  // (cross-device install scenario).
   if (!btService.isConnected) {
     btService.tryAutoConnect().then((success) {
       if (success) {
         diag.info('LIFE', 'Auto-connected to saved adapter on init');
+      } else {
+        // Fallback: try Firestore adapter address
+        final adapter = ref.read(savedAdapterProvider);
+        if (adapter != null) {
+          diag.info('LIFE', 'Trying Firestore adapter fallback', adapter.address);
+          btService.connect(adapter.address);
+        }
       }
     }).catchError((Object e) {
       diag.error('LIFE', 'Auto-connect failed on init', '$e');
@@ -139,6 +149,13 @@ final obdLifecycleProvider = Provider<void>((ref) {
         btService.tryAutoConnect().then((success) {
           if (success) {
             diag.info('LIFE', 'Auto-connected to saved adapter on resume');
+          } else {
+            // Fallback: try Firestore adapter address
+            final adapter = ref.read(savedAdapterProvider);
+            if (adapter != null) {
+              diag.info('LIFE', 'Resume fallback: Firestore adapter', adapter.address);
+              btService.connect(adapter.address);
+            }
           }
         }).catchError((Object e) {
           diag.error('LIFE', 'Auto-connect failed on resume', '$e');

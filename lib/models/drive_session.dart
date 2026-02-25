@@ -41,6 +41,9 @@ class DriveSession {
   final double? avgLoad;
   final double? avgRpm;
 
+  // Idle
+  final int idleSeconds;
+
   // DPF
   final bool dpfRegenOccurred;
   final int dpfRegenCount;
@@ -100,6 +103,7 @@ class DriveSession {
     this.averageMPG = 0,
     this.instantMPGMin,
     this.instantMPGMax,
+    this.idleSeconds = 0,
     this.maxBoostPsi,
     this.maxEgtF,
     this.maxCoolantTempF,
@@ -165,6 +169,7 @@ class DriveSession {
     double? averageMPG,
     double? instantMPGMin,
     double? instantMPGMax,
+    int? idleSeconds,
     double? maxBoostPsi,
     double? maxEgtF,
     double? maxCoolantTempF,
@@ -218,6 +223,7 @@ class DriveSession {
       averageMPG: averageMPG ?? this.averageMPG,
       instantMPGMin: instantMPGMin ?? this.instantMPGMin,
       instantMPGMax: instantMPGMax ?? this.instantMPGMax,
+      idleSeconds: idleSeconds ?? this.idleSeconds,
       maxBoostPsi: maxBoostPsi ?? this.maxBoostPsi,
       maxEgtF: maxEgtF ?? this.maxEgtF,
       maxCoolantTempF: maxCoolantTempF ?? this.maxCoolantTempF,
@@ -273,6 +279,7 @@ class DriveSession {
       'averageMPG': averageMPG,
       'instantMPGMin': instantMPGMin,
       'instantMPGMax': instantMPGMax,
+      'idleSeconds': idleSeconds,
       'maximums': {
         'maxBoostPsi': maxBoostPsi,
         'maxEgtF': maxEgtF,
@@ -336,6 +343,7 @@ class DriveSession {
       averageMPG: (d['averageMPG'] as num?)?.toDouble() ?? 0,
       instantMPGMin: (d['instantMPGMin'] as num?)?.toDouble(),
       instantMPGMax: (d['instantMPGMax'] as num?)?.toDouble(),
+      idleSeconds: (d['idleSeconds'] as num?)?.toInt() ?? 0,
       maxBoostPsi: (maxs['maxBoostPsi'] as num?)?.toDouble(),
       maxEgtF: (maxs['maxEgtF'] as num?)?.toDouble(),
       maxCoolantTempF: (maxs['maxCoolantTempF'] as num?)?.toDouble(),

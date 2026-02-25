@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../app/theme.dart';
 import '../../config/constants.dart';
 import '../../models/drive_session.dart';
+import '../../providers/data_explorer_provider.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/drive_stats_provider.dart';
 import '../../providers/vehicle_provider.dart';
@@ -83,6 +84,22 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
   void dispose() {
     _animController.dispose();
     super.dispose();
+  }
+
+  /// Navigate to Data Explorer with a specific parameter pre-selected,
+  /// scoped to this drive's time range.
+  void _openInExplorer(String paramId) {
+    HapticFeedback.lightImpact();
+    final drive = widget.drive;
+    ref.read(selectedParamsProvider.notifier).setParams([paramId]);
+    // Scope to this drive's time range
+    if (drive.endTime != null) {
+      ref.read(timeRangeProvider.notifier).setCustomRange(
+        drive.startTime,
+        drive.endTime!,
+      );
+    }
+    context.go('/explorer');
   }
 
   @override
@@ -169,6 +186,13 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
                 ],
                 onSelected: (value) {
                   if (value == 'explorer') {
+                    // Scope explorer to this drive's time range
+                    if (drive.endTime != null) {
+                      ref.read(timeRangeProvider.notifier).setCustomRange(
+                        drive.startTime,
+                        drive.endTime!,
+                      );
+                    }
                     context.go('/explorer');
                   } else if (value == 'share') {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -260,7 +284,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 4. Mini Sparklines (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) => SparklineSection(stats: stats),
+              data: (stats) => SparklineSection(
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 280),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -281,7 +308,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 6. Engine Performance (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) => EngineSection(stats: stats),
+              data: (stats) => EngineSection(
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 200),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -292,7 +322,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 7. Thermal Profile (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) => ThermalSection(stats: stats),
+              data: (stats) => ThermalSection(
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 300),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -303,7 +336,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 8. Drivetrain (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) => DrivetrainSection(stats: stats),
+              data: (stats) => DrivetrainSection(
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 180),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -314,8 +350,11 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 9. Emissions & DPF (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) =>
-                  EmissionsSection(drive: drive, stats: stats),
+              data: (stats) => EmissionsSection(
+                drive: drive,
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 180),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -326,7 +365,10 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
           // ─── 10. System Health (Tier 2) ───
           SliverToBoxAdapter(
             child: statsAsync.when(
-              data: (stats) => SystemSection(stats: stats),
+              data: (stats) => SystemSection(
+                stats: stats,
+                onParamTap: _openInExplorer,
+              ),
               loading: () => const _ShimmerSection(height: 120),
               error: (_, __) => const SizedBox.shrink(),
             ),
@@ -354,6 +396,13 @@ class _DriveDetailBodyState extends ConsumerState<_DriveDetailBody>
               child: _OpenInExplorerButton(
                 onTap: () {
                   HapticFeedback.lightImpact();
+                  // Scope explorer to this drive's time range
+                  if (drive.endTime != null) {
+                    ref.read(timeRangeProvider.notifier).setCustomRange(
+                      drive.startTime,
+                      drive.endTime!,
+                    );
+                  }
                   context.go('/explorer');
                 },
               ),

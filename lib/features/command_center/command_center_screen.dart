@@ -7,7 +7,9 @@ import '../../app/theme.dart';
 import '../../models/dashboard_config.dart';
 import '../../providers/ai_provider.dart';
 import '../../providers/bluetooth_provider.dart';
+import '../../providers/bluetooth_ux_provider.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../providers/data_explorer_provider.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/live_data_provider.dart';
 import '../../models/vehicle.dart';
@@ -59,11 +61,11 @@ class CommandCenterScreen extends ConsumerWidget {
             ),
           ),
 
-          // Connect prompt when disconnected
+          // Context-aware connect prompt when not connected
           if (!isConnected)
             SliverToBoxAdapter(
-              child: _ConnectObdCard(
-                onConnect: () => context.push('/bluetooth-setup'),
+              child: _ContextAwareConnectCard(
+                onNavigateSetup: () => context.push('/bluetooth-setup'),
               ),
             ),
 
@@ -80,6 +82,11 @@ class CommandCenterScreen extends ConsumerWidget {
               liveData: liveData,
               sparklineData: sparklineData,
               isConnected: isConnected,
+              onWidgetTap: (paramId) {
+                HapticFeedback.lightImpact();
+                ref.read(selectedParamsProvider.notifier).setParams([paramId]);
+                context.go('/explorer');
+              },
             ),
           ),
 
@@ -96,7 +103,7 @@ class CommandCenterScreen extends ConsumerWidget {
         isConnected: isConnected,
         liveData: liveData,
         onSwitchDashboard: () => _showDashboardSwitcher(context, ref),
-        onExploreTap: () => context.push('/explorer'),
+        onExploreTap: () => context.go('/explorer'),
       ),
     );
   }
@@ -312,79 +319,120 @@ class _CommandCenterAppBar extends StatelessWidget {
           ],
         ),
       ),
-      actions: [
-        // Connection indicator
+      actions: const [
         Padding(
-          padding: const EdgeInsets.only(right: AppSpacing.lg),
-          child: Consumer(
-            builder: (context, ref, _) {
-              final connected = ref.watch(isBluetoothConnectedProvider);
-              return GestureDetector(
-                onTap: () => context.push('/bluetooth-setup'),
-                child: AnimatedContainer(
-                  duration: AppTheme.animDuration,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: connected
-                        ? AppColors.success.withValues(alpha: 0.12)
-                        : AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(AppRadius.round),
-                    border: Border.all(
-                      color: connected
-                          ? AppColors.success.withValues(alpha: 0.3)
-                          : AppColors.surfaceBorder,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        connected
-                            ? Icons.bluetooth_connected
-                            : Icons.bluetooth_disabled,
-                        size: 14,
-                        color: connected
-                            ? AppColors.success
-                            : AppColors.textTertiary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        connected ? 'LIVE' : 'OBD',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: connected
-                              ? AppColors.success
-                              : AppColors.textTertiary,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+          padding: EdgeInsets.only(right: AppSpacing.lg),
+          child: _ObdStatusIndicator(),
         ),
       ],
     );
   }
 }
 
-// ─── Connect OBD Card ───
+// ─── OBD Status Indicator (AppBar) ───
 
-class _ConnectObdCard extends StatefulWidget {
-  final VoidCallback onConnect;
-
-  const _ConnectObdCard({required this.onConnect});
+class _ObdStatusIndicator extends ConsumerStatefulWidget {
+  const _ObdStatusIndicator();
 
   @override
-  State<_ConnectObdCard> createState() => _ConnectObdCardState();
+  ConsumerState<_ObdStatusIndicator> createState() => _ObdStatusIndicatorState();
 }
 
-class _ConnectObdCardState extends State<_ConnectObdCard>
+class _ObdStatusIndicatorState extends ConsumerState<_ObdStatusIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uxState = ref.watch(bluetoothUxStateProvider);
+
+    final (label, color, icon, shouldPulse) = switch (uxState) {
+      BluetoothUxState.connected => ('LIVE', AppColors.success, Icons.bluetooth_connected, false),
+      BluetoothUxState.connecting => ('LINK', AppColors.warning, Icons.bluetooth_searching, true),
+      BluetoothUxState.sleepPhaseA ||
+      BluetoothUxState.sleepPhaseB ||
+      BluetoothUxState.sleepPhaseC => ('SLEEP', AppColors.dataAccent.withValues(alpha: 0.5), Icons.bedtime_outlined, true),
+      BluetoothUxState.scanning => ('SCAN', AppColors.dataAccent, Icons.bluetooth_searching, true),
+      BluetoothUxState.error => ('ERR', AppColors.critical, Icons.bluetooth_disabled, false),
+      BluetoothUxState.knownDisconnected ||
+      BluetoothUxState.newSetup => ('OBD', AppColors.textTertiary, Icons.bluetooth, false),
+    };
+
+    if (shouldPulse && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!shouldPulse && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+
+    return GestureDetector(
+      onTap: () => context.push('/bluetooth-setup'),
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, _) {
+          final alpha = shouldPulse ? 0.7 + 0.3 * _pulse.value : 1.0;
+          final effectiveColor = color.withValues(alpha: alpha);
+
+          return AnimatedContainer(
+            duration: AppTheme.animDuration,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: effectiveColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.round),
+              border: Border.all(
+                color: effectiveColor.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: effectiveColor),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: effectiveColor,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Context-Aware Connect Card ───
+
+class _ContextAwareConnectCard extends ConsumerStatefulWidget {
+  final VoidCallback onNavigateSetup;
+
+  const _ContextAwareConnectCard({required this.onNavigateSetup});
+
+  @override
+  ConsumerState<_ContextAwareConnectCard> createState() =>
+      _ContextAwareConnectCardState();
+}
+
+class _ContextAwareConnectCardState extends ConsumerState<_ContextAwareConnectCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
@@ -409,96 +457,210 @@ class _ConnectObdCardState extends State<_ConnectObdCard>
 
   @override
   Widget build(BuildContext context) {
+    final uxState = ref.watch(bluetoothUxStateProvider);
+    final adapter = ref.watch(savedAdapterProvider);
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: GlassCard(
-        glowColor: AppColors.dataAccent,
-        borderColor: AppColors.dataAccent.withValues(alpha: 0.3),
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        onTap: widget.onConnect,
-        child: Column(
-          children: [
-            // Pulsing Bluetooth icon
-            AnimatedBuilder(
-              animation: _pulseAnim,
-              builder: (context, child) {
-                return Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.dataAccent
-                        .withValues(alpha: 0.08 * _pulseAnim.value),
-                    border: Border.all(
-                      color: AppColors.dataAccent
-                          .withValues(alpha: 0.25 * _pulseAnim.value),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.dataAccent
-                            .withValues(alpha: 0.15 * _pulseAnim.value),
-                        blurRadius: 24 * _pulseAnim.value,
-                        spreadRadius: 4 * _pulseAnim.value,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.bluetooth,
-                    size: 32,
-                    color: AppColors.dataAccent
-                        .withValues(alpha: 0.5 + 0.5 * _pulseAnim.value),
-                  ),
-                );
-              },
+      child: switch (uxState) {
+        BluetoothUxState.knownDisconnected when adapter != null =>
+          _buildKnownAdapterCard(adapter),
+        BluetoothUxState.sleepPhaseA ||
+        BluetoothUxState.sleepPhaseB ||
+        BluetoothUxState.sleepPhaseC => _buildSleepCard(uxState),
+        _ => _buildNewSetupCard(),
+      },
+    );
+  }
+
+  /// Compact card for known adapter — one-tap reconnect.
+  Widget _buildKnownAdapterCard(ObdAdapter adapter) {
+    final btService = ref.read(bluetoothServiceProvider);
+
+    return GlassCard(
+      glowColor: AppColors.primary,
+      borderColor: AppColors.primary.withValues(alpha: 0.3),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      onTap: () async {
+        await btService.connect(adapter.address);
+      },
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(11),
             ),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              'Connect OBD Adapter',
-              style: AppTypography.displaySmall.copyWith(fontSize: 16),
+            child: const Icon(Icons.bluetooth_searching, size: 22,
+                color: AppColors.primary),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Reconnect to ${adapter.name}',
+                  style: AppTypography.labelMedium.copyWith(color: AppColors.primary),
+                ),
+                Text(adapter.type, style: AppTypography.bodySmall),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Pair your OBDLink MX+ to unlock real-time\nengine monitoring and AI insights',
-              style: AppTypography.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xxl,
-                vertical: AppSpacing.md,
-              ),
+          ),
+          Icon(Icons.chevron_right, color: AppColors.primary.withValues(alpha: 0.5)),
+        ],
+      ),
+    );
+  }
+
+  /// Compact sleep status card.
+  Widget _buildSleepCard(BluetoothUxState uxState) {
+    final btService = ref.read(bluetoothServiceProvider);
+    final phaseLabel = switch (uxState) {
+      BluetoothUxState.sleepPhaseA => 'Quick restart check',
+      BluetoothUxState.sleepPhaseB => 'Adapter powering down',
+      BluetoothUxState.sleepPhaseC => 'Background monitoring',
+      _ => '',
+    };
+
+    return GlassCard(
+      glowColor: AppColors.dataAccent.withValues(alpha: 0.3),
+      borderColor: AppColors.dataAccent.withValues(alpha: 0.2),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      onTap: widget.onNavigateSetup,
+      child: Row(
+        children: [
+          AnimatedBuilder(
+            animation: _pulseAnim,
+            builder: (context, _) => Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.dataAccent,
-                    AppColors.dataAccent.withValues(alpha: 0.8),
+                color: AppColors.dataAccent.withValues(
+                    alpha: 0.08 * _pulseAnim.value),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(Icons.bedtime_outlined, size: 22,
+                  color: AppColors.dataAccent.withValues(
+                      alpha: 0.4 + 0.6 * _pulseAnim.value)),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Adapter Sleeping',
+                  style: AppTypography.labelMedium.copyWith(
+                      color: AppColors.dataAccent),
+                ),
+                Text(phaseLabel, style: AppTypography.bodySmall),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              final address = ref.read(savedAdapterProvider)?.address;
+              if (address != null) btService.connect(address);
+            },
+            child: Text('Wake',
+                style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.dataAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Full card for new setup — same as original _ConnectObdCard.
+  Widget _buildNewSetupCard() {
+    return GlassCard(
+      glowColor: AppColors.dataAccent,
+      borderColor: AppColors.dataAccent.withValues(alpha: 0.3),
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      onTap: widget.onNavigateSetup,
+      child: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _pulseAnim,
+            builder: (context, child) {
+              return Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.dataAccent
+                      .withValues(alpha: 0.08 * _pulseAnim.value),
+                  border: Border.all(
+                    color: AppColors.dataAccent
+                        .withValues(alpha: 0.25 * _pulseAnim.value),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.dataAccent
+                          .withValues(alpha: 0.15 * _pulseAnim.value),
+                      blurRadius: 24 * _pulseAnim.value,
+                      spreadRadius: 4 * _pulseAnim.value,
+                    ),
                   ],
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.round),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.dataAccent.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.bluetooth_searching, size: 18, color: Colors.white),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Scan for Devices',
-                    style: AppTypography.button,
-                  ),
-                ],
-              ),
+                child: Icon(
+                  Icons.bluetooth,
+                  size: 32,
+                  color: AppColors.dataAccent
+                      .withValues(alpha: 0.5 + 0.5 * _pulseAnim.value),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Connect OBD Adapter',
+            style: AppTypography.displaySmall.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Pair your OBDLink MX+ to unlock real-time\nengine monitoring and AI insights',
+            style: AppTypography.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xxl,
+              vertical: AppSpacing.md,
             ),
-          ],
-        ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.dataAccent,
+                  AppColors.dataAccent.withValues(alpha: 0.8),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(AppRadius.round),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.dataAccent.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.bluetooth_searching, size: 18,
+                    color: Colors.white),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Scan for Devices', style: AppTypography.button),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -511,6 +673,7 @@ class _DashboardGrid extends StatelessWidget {
   final Map<String, double> liveData;
   final Map<String, List<double>> sparklineData;
   final bool isConnected;
+  final void Function(String paramId)? onWidgetTap;
 
   const _DashboardGrid({
     super.key,
@@ -518,6 +681,7 @@ class _DashboardGrid extends StatelessWidget {
     required this.liveData,
     required this.sparklineData,
     required this.isConnected,
+    this.onWidgetTap,
   });
 
   @override
@@ -660,10 +824,7 @@ class _DashboardGrid extends StatelessWidget {
           config: config,
           liveData: liveData,
           sparklineData: sparklineData,
-          onWidgetTap: (paramId) {
-            HapticFeedback.lightImpact();
-            context.push('/explorer');
-          },
+          onWidgetTap: onWidgetTap,
         ),
       ),
     );

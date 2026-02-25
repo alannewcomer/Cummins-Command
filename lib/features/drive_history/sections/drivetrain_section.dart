@@ -7,8 +7,9 @@ import '../../../widgets/common/glass_card.dart';
 /// Drivetrain section: gear distribution bar chart, TC lock %, VGT/EGR avg.
 class DrivetrainSection extends StatelessWidget {
   final DriveStats stats;
+  final void Function(String paramId)? onParamTap;
 
-  const DrivetrainSection({super.key, required this.stats});
+  const DrivetrainSection({super.key, required this.stats, this.onParamTap});
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +78,7 @@ class DrivetrainSection extends StatelessWidget {
                           value:
                               '${stats.avgVgtPercent.toStringAsFixed(0)}%',
                           color: AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('vgtPosition') : null,
                         ),
                       if (hasEgr)
                         _StatItem(
@@ -84,6 +86,7 @@ class DrivetrainSection extends StatelessWidget {
                           value:
                               '${stats.avgEgrPercent.toStringAsFixed(0)}%',
                           color: AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('egrPosition') : null,
                         ),
                     ],
                   ),
@@ -184,28 +187,34 @@ class _StatItem extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatItem({
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(label, style: AppTypography.labelSmall),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: AppTypography.dataMedium.copyWith(
-              fontSize: 16,
-              color: color,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            Text(label, style: AppTypography.labelSmall),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: AppTypography.dataMedium.copyWith(
+                fontSize: 16,
+                color: color,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

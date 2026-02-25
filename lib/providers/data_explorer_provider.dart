@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import '../config/constants.dart';
 import '../config/pid_config.dart';
+import '../models/datapoint.dart';
 import '../services/timeseries_file.dart';
 import 'vehicle_provider.dart';
 
@@ -112,27 +116,48 @@ final explorerDataProvider =
       .where('startTime', isLessThanOrEqualTo: Timestamp.fromDate(timeRange.end))
       .get();
 
-  // Download timeseries files in parallel for new drives
+  // Load timeseries files in parallel — prefer local files first
+  final localDir = await getApplicationDocumentsDirectory();
   final futures = <Future<void>>[];
 
   for (final driveDoc in drivesSnap.docs) {
+    final driveId = driveDoc.id;
     final data = driveDoc.data();
     final timeseriesPath = data['timeseriesPath'] as String?;
     final uploaded = data['timeseriesUploaded'] as bool? ?? false;
 
-    if (timeseriesPath != null && uploaded) {
-      // New drive: download from Firebase Storage
+    // 1. Check for local timeseries file (recorded on this device)
+    final localFile = File('${localDir.path}/timeseries_$driveId.json.gz');
+    if (localFile.existsSync()) {
+      futures.add(_loadFromLocalFile(localFile.path, selectedParams, result));
+    } else if (timeseriesPath != null && uploaded) {
+      // 2. Download from Firebase Storage (cached in temp)
       futures.add(_loadFromStorage(timeseriesPath, selectedParams, result));
     } else {
-      // Legacy drive: read from Firestore subcollection
+      // 3. Legacy: read from Firestore subcollection
       futures.add(_loadFromFirestore(driveDoc.reference, selectedParams, result));
     }
   }
 
   await Future.wait(futures);
 
+  // Sort each parameter's data chronologically (drives load in parallel)
+  for (final entries in result.values) {
+    entries.sort((a, b) => a.key.compareTo(b.key));
+  }
+
   return result;
 });
+
+/// Load datapoints from a local timeseries file on this device.
+Future<void> _loadFromLocalFile(
+  String filePath,
+  List<String> selectedParams,
+  Map<String, List<MapEntry<DateTime, double>>> result,
+) async {
+  final points = await TimeseriesReader.fromLocalFile(filePath);
+  _extractParams(points, selectedParams, result);
+}
 
 /// Load datapoints from a Firebase Storage timeseries file.
 Future<void> _loadFromStorage(
@@ -141,9 +166,18 @@ Future<void> _loadFromStorage(
   Map<String, List<MapEntry<DateTime, double>>> result,
 ) async {
   final points = await TimeseriesReader.fromStorage(storagePath);
+  _extractParams(points, selectedParams, result);
+}
+
+/// Extract selected parameters from a list of DataPoints into the result map.
+void _extractParams(
+  List<DataPoint> points,
+  List<String> selectedParams,
+  Map<String, List<MapEntry<DateTime, double>>> result,
+) {
   for (final dp in points) {
     final ts = DateTime.fromMillisecondsSinceEpoch(dp.timestamp);
-    final dpMap = dp.toFirestore(); // Reuse existing serialization
+    final dpMap = dp.toFirestore();
     for (final param in selectedParams) {
       final val = (dpMap[param] as num?)?.toDouble();
       if (val != null) {

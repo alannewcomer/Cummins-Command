@@ -9,11 +9,13 @@ import '../../../widgets/common/glass_card.dart';
 class EmissionsSection extends StatelessWidget {
   final DriveSession drive;
   final DriveStats stats;
+  final void Function(String paramId)? onParamTap;
 
   const EmissionsSection({
     super.key,
     required this.drive,
     required this.stats,
+    this.onParamTap,
   });
 
   @override
@@ -61,6 +63,7 @@ class EmissionsSection extends StatelessWidget {
                         color: stats.maxDpfSootLoad > 80
                             ? AppColors.warning
                             : AppColors.textSecondary,
+                        onTap: onParamTap != null ? () => onParamTap!('dpfSootLoad') : null,
                       ),
                       if (stats.avgDpfDiffPressure > 0)
                         _MetricTile(
@@ -69,6 +72,7 @@ class EmissionsSection extends StatelessWidget {
                               stats.avgDpfDiffPressure.toStringAsFixed(1),
                           sub: 'kPa avg',
                           color: AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('dpfDiffPressure') : null,
                         ),
                       if (drive.dpfRegenOccurred)
                         _MetricTile(
@@ -77,6 +81,7 @@ class EmissionsSection extends StatelessWidget {
                           sub:
                               '${(drive.dpfRegenDurationSeconds / 60).toStringAsFixed(0)}m total',
                           color: AppColors.warning,
+                          onTap: onParamTap != null ? () => onParamTap!('dpfRegenStatus') : null,
                         ),
                     ],
                   ),
@@ -97,12 +102,14 @@ class EmissionsSection extends StatelessWidget {
                         value: stats.avgNoxPreScr.toStringAsFixed(0),
                         sub: 'ppm avg',
                         color: AppColors.textSecondary,
+                        onTap: onParamTap != null ? () => onParamTap!('noxPreScr') : null,
                       ),
                       _MetricTile(
                         label: 'NOx Post-SCR',
                         value: stats.avgNoxPostScr.toStringAsFixed(0),
                         sub: 'ppm avg',
                         color: AppColors.textSecondary,
+                        onTap: onParamTap != null ? () => onParamTap!('noxPostScr') : null,
                       ),
                       if (stats.scrEfficiencyPercent > 0)
                         _MetricTile(
@@ -138,6 +145,7 @@ class EmissionsSection extends StatelessWidget {
                           color: stats.defLevelEnd < 15
                               ? AppColors.warning
                               : AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('defLevel') : null,
                         ),
                       if (stats.defConsumedMl > 0)
                         _MetricTile(
@@ -147,6 +155,7 @@ class EmissionsSection extends StatelessWidget {
                               : '${stats.defConsumedMl.toStringAsFixed(0)}mL',
                           sub: '',
                           color: AppColors.textSecondary,
+                          onTap: onParamTap != null ? () => onParamTap!('defDosingRate') : null,
                         ),
                     ],
                   ),
@@ -165,34 +174,40 @@ class _MetricTile extends StatelessWidget {
   final String value;
   final String sub;
   final Color color;
+  final VoidCallback? onTap;
 
   const _MetricTile({
     required this.label,
     required this.value,
     required this.sub,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(label, style: AppTypography.labelSmall),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: AppTypography.dataMedium.copyWith(
-              fontSize: 16,
-              color: color,
-            ),
-          ),
-          if (sub.isNotEmpty)
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            Text(label, style: AppTypography.labelSmall),
+            const SizedBox(height: 2),
             Text(
-              sub,
-              style: AppTypography.labelSmall.copyWith(fontSize: 9),
+              value,
+              style: AppTypography.dataMedium.copyWith(
+                fontSize: 16,
+                color: color,
+              ),
             ),
-        ],
+            if (sub.isNotEmpty)
+              Text(
+                sub,
+                style: AppTypography.labelSmall.copyWith(fontSize: 9),
+              ),
+          ],
+        ),
       ),
     );
   }

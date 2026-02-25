@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../app/theme.dart';
 import '../../config/constants.dart';
+import '../../models/vehicle.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/bluetooth_provider.dart';
+import '../../providers/bluetooth_ux_provider.dart';
 import '../../providers/drives_provider.dart';
 import '../../providers/live_data_provider.dart';
 import '../../providers/vehicle_provider.dart';
@@ -13,8 +16,11 @@ import '../../services/bluetooth_service.dart';
 import '../../services/diagnostic_service.dart';
 import '../../widgets/common/glass_card.dart';
 
-/// Full-featured Bluetooth setup screen with guided connection flow,
-/// auto-reconnect controls, and connection health monitoring.
+/// Full-featured Bluetooth setup screen with context-aware UX:
+/// - New setup: full scan flow with instructions
+/// - Known adapter: one-tap reconnect card
+/// - Sleep phases: status card with phase info
+/// - Connected: green status with monitoring controls
 class BluetoothSetupScreen extends ConsumerStatefulWidget {
   const BluetoothSetupScreen({super.key});
 
@@ -50,9 +56,7 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
 
   @override
   Widget build(BuildContext context) {
-    final btState = ref.watch(bluetoothStateProvider);
-    final devices = ref.watch(bluetoothDevicesProvider);
-    final btService = ref.watch(bluetoothServiceProvider);
+    final uxState = ref.watch(bluetoothUxStateProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -65,113 +69,447 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
+        children: _buildBodyForState(uxState),
+      ),
+    );
+  }
+
+  List<Widget> _buildBodyForState(BluetoothUxState uxState) {
+    return switch (uxState) {
+      BluetoothUxState.newSetup => _buildNewSetupBody(),
+      BluetoothUxState.knownDisconnected => _buildKnownAdapterBody(),
+      BluetoothUxState.scanning => _buildNewSetupBody(),
+      BluetoothUxState.connecting => _buildConnectingBody(),
+      BluetoothUxState.connected => _buildConnectedBody(),
+      BluetoothUxState.sleepPhaseA ||
+      BluetoothUxState.sleepPhaseB ||
+      BluetoothUxState.sleepPhaseC => _buildSleepBody(uxState),
+      BluetoothUxState.error => _buildErrorBody(),
+    };
+  }
+
+  // ─── New Setup Body (first-time pairing) ───
+
+  List<Widget> _buildNewSetupBody() {
+    final btState = ref.watch(bluetoothStateProvider);
+    final devices = ref.watch(bluetoothDevicesProvider);
+    final btService = ref.watch(bluetoothServiceProvider);
+
+    return [
+      _buildStatusIcon(
+        Icons.bluetooth,
+        AppColors.dataAccent,
+        'Ready to pair',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      _buildInstructionsCard(),
+      const SizedBox(height: AppSpacing.xl),
+      _buildScanSection(btState, devices, btService),
+      const SizedBox(height: AppSpacing.xl),
+      _buildAutoRecoveryCard(btService),
+    ];
+  }
+
+  // ─── Known Adapter Body (reconnect) ───
+
+  List<Widget> _buildKnownAdapterBody() {
+    final adapter = ref.watch(savedAdapterProvider);
+    final btService = ref.watch(bluetoothServiceProvider);
+    if (adapter == null) return _buildNewSetupBody();
+
+    return [
+      _buildAdapterInfoCard(adapter),
+      const SizedBox(height: AppSpacing.xl),
+
+      // Reconnect button
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.bluetooth_searching, size: 20),
+          label: const Text('Reconnect'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.medium),
+            ),
+          ),
+          onPressed: () => _reconnectToAdapter(adapter, btService),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.md),
+
+      // Secondary actions
+      Row(
         children: [
-          // ── Connection Status Card ──
-          _buildStatusCard(btState, btService),
-          const SizedBox(height: AppSpacing.xl),
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Use Different'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                side: const BorderSide(color: AppColors.surfaceBorder),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              ),
+              onPressed: _startFreshScan,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.link_off, size: 16),
+              label: const Text('Forget'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.critical,
+                side: BorderSide(color: AppColors.critical.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              ),
+              onPressed: _forgetAdapter,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      _buildAutoRecoveryCard(btService),
+    ];
+  }
 
-          // ── Setup Instructions ──
-          _buildInstructionsCard(),
-          const SizedBox(height: AppSpacing.xl),
+  // ─── Connecting Body ───
 
-          // ── Scan / Devices Section ──
-          _buildScanSection(btState, devices, btService),
-          const SizedBox(height: AppSpacing.xl),
+  List<Widget> _buildConnectingBody() {
+    final adapter = ref.watch(savedAdapterProvider);
 
-          // ── Auto-Recovery Settings ──
-          _buildAutoRecoveryCard(btService),
-          const SizedBox(height: AppSpacing.xl),
+    return [
+      if (adapter != null) ...[
+        _buildAdapterInfoCard(adapter),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+      _buildStatusIcon(
+        Icons.bluetooth_searching,
+        AppColors.warning,
+        _isInitializing ? 'Initializing OBD adapter...' : 'Connecting...',
+        pulsing: true,
+      ),
+    ];
+  }
 
-          // ── Connection Health ──
-          _buildHealthCard(btState),
+  // ─── Connected Body ───
+
+  List<Widget> _buildConnectedBody() {
+    final adapter = ref.watch(savedAdapterProvider);
+    final btService = ref.watch(bluetoothServiceProvider);
+
+    return [
+      if (adapter != null) ...[
+        _buildAdapterInfoCard(adapter, connected: true),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+      _buildStatusIcon(
+        Icons.bluetooth_connected,
+        AppColors.success,
+        'Connected to OBDLink MX+',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      if (_isInitializing)
+        const Center(
+          child: Column(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              Text('Initializing OBD adapter...'),
+            ],
+          ),
+        )
+      else ...[
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check, size: 18),
+            label: const Text('Start Monitoring'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.medium),
+              ),
+            ),
+            onPressed: () => context.go('/'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Center(
+          child: TextButton(
+            onPressed: () => btService.disconnect(),
+            child: Text('Disconnect', style: TextStyle(color: AppColors.critical)),
+          ),
+        ),
+      ],
+      const SizedBox(height: AppSpacing.xl),
+      _buildHealthCard(true),
+    ];
+  }
+
+  // ─── Sleep Body ───
+
+  List<Widget> _buildSleepBody(BluetoothUxState uxState) {
+    final btService = ref.watch(bluetoothServiceProvider);
+    final adapter = ref.watch(savedAdapterProvider);
+
+    final (phaseLabel, phaseDescription) = switch (uxState) {
+      BluetoothUxState.sleepPhaseA => (
+          'Phase A — Quick Restart Detection',
+          'Checking every 30s for engine restart. '
+              'If you just stopped at a gas station, the adapter will reconnect automatically.',
+        ),
+      BluetoothUxState.sleepPhaseB => (
+          'Phase B — Quiet Period',
+          'Letting the OBDLink MX+ BatterySaver fully power down. '
+              'No connection attempts during this window to preserve truck battery.',
+        ),
+      BluetoothUxState.sleepPhaseC => (
+          'Phase C — Background Monitoring',
+          'Checking every 60s for engine restart. '
+              'Connection attempts fail instantly when the adapter is sleeping — zero battery impact.',
+        ),
+      _ => ('', ''),
+    };
+
+    final elapsed = btService.sleepDisconnectTime != null
+        ? DateTime.now().difference(btService.sleepDisconnectTime!)
+        : Duration.zero;
+    final elapsedText = elapsed.inMinutes > 0
+        ? '${elapsed.inMinutes}m ago'
+        : '${elapsed.inSeconds}s ago';
+
+    return [
+      if (adapter != null) ...[
+        _buildAdapterInfoCard(adapter),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+
+      // Sleep status card
+      GlassCard(
+        glowColor: AppColors.dataAccent.withValues(alpha: 0.3),
+        borderColor: AppColors.dataAccent.withValues(alpha: 0.2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, _) => Icon(
+                    Icons.bedtime_outlined,
+                    size: 20,
+                    color: AppColors.dataAccent.withValues(
+                        alpha: 0.4 + 0.6 * _pulseAnimation.value),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Adapter Sleeping',
+                  style: AppTypography.labelLarge.copyWith(color: AppColors.dataAccent),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(phaseLabel, style: AppTypography.labelMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Text(phaseDescription, style: AppTypography.bodyMedium),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Disconnected', style: AppTypography.labelSmall),
+                Text(elapsedText,
+                    style: AppTypography.dataSmall.copyWith(color: AppColors.dataAccent)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Reconnect attempts', style: AppTypography.labelSmall),
+                Text('${btService.sleepReconnectAttempts}',
+                    style: AppTypography.dataSmall.copyWith(color: AppColors.dataAccent)),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+
+      // Manual reconnect
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.bluetooth_searching, size: 18),
+          label: const Text('Try Reconnecting Now'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.dataAccent,
+            side: BorderSide(color: AppColors.dataAccent.withValues(alpha: 0.4)),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          ),
+          onPressed: () {
+            final address = adapter?.address ?? btService.connectedAddress;
+            if (address != null) {
+              btService.connect(address);
+            }
+          },
+        ),
+      ),
+    ];
+  }
+
+  // ─── Error Body ───
+
+  List<Widget> _buildErrorBody() {
+    final btService = ref.watch(bluetoothServiceProvider);
+    final adapter = ref.watch(savedAdapterProvider);
+
+    return [
+      _buildStatusIcon(
+        Icons.bluetooth_disabled,
+        AppColors.critical,
+        _errorMessage ?? btService.lastError ?? 'Connection error',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+
+      if (adapter != null) ...[
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry Connection'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.medium),
+              ),
+            ),
+            onPressed: () => _reconnectToAdapter(adapter, btService),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+      ],
+
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          icon: const Icon(Icons.search, size: 18),
+          label: const Text('Scan for Devices'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textSecondary,
+            side: const BorderSide(color: AppColors.surfaceBorder),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          ),
+          onPressed: _startFreshScan,
+        ),
+      ),
+    ];
+  }
+
+  // ─── Shared Widgets ───
+
+  Widget _buildAdapterInfoCard(ObdAdapter adapter, {bool connected = false}) {
+    final glowColor = connected ? AppColors.success : AppColors.primary;
+    final pairedDate = DateFormat('MMM d, yyyy').format(adapter.pairedAt);
+
+    return GlassCard(
+      glowColor: glowColor,
+      borderColor: glowColor.withValues(alpha: 0.3),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: glowColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              connected ? Icons.bluetooth_connected : Icons.bluetooth,
+              color: glowColor,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  adapter.name,
+                  style: AppTypography.labelLarge.copyWith(color: glowColor),
+                ),
+                const SizedBox(height: 2),
+                Text(adapter.type, style: AppTypography.bodySmall),
+                Text(
+                  '${adapter.address}  •  Paired $pairedDate',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.textTertiary,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (connected)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.round),
+              ),
+              child: Text(
+                'LIVE',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.success,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusCard(
-      AsyncValue<BluetoothConnectionState> btState, BluetoothService btService) {
-    final state = btState.value ?? BluetoothConnectionState.disconnected;
-
-    final (statusText, statusColor, statusIcon) = switch (state) {
-      BluetoothConnectionState.connected => (
-          'Connected to OBDLink MX+',
-          AppColors.success,
-          Icons.bluetooth_connected,
-        ),
-      BluetoothConnectionState.connecting => (
-          'Connecting...',
-          AppColors.warning,
-          Icons.bluetooth_searching,
-        ),
-      BluetoothConnectionState.scanning => (
-          'Scanning for devices...',
-          AppColors.dataAccent,
-          Icons.bluetooth_searching,
-        ),
-      BluetoothConnectionState.error => (
-          _errorMessage ?? 'Connection error',
-          AppColors.critical,
-          Icons.bluetooth_disabled,
-        ),
-      BluetoothConnectionState.disconnected => (
-          'Not connected',
-          AppColors.textTertiary,
-          Icons.bluetooth,
-        ),
-    };
-
+  Widget _buildStatusIcon(IconData icon, Color color, String text,
+      {bool pulsing = false}) {
     return GlassCard(
-      glowColor: statusColor,
+      glowColor: color,
       child: Column(
         children: [
-          // Pulsing Bluetooth icon
           AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
+              final alpha = pulsing ? _pulseAnimation.value : 1.0;
               return Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: statusColor.withValues(alpha: 0.1 * _pulseAnimation.value),
+                  color: color.withValues(alpha: 0.1 * alpha),
                   border: Border.all(
-                    color: statusColor.withValues(alpha: 0.3 * _pulseAnimation.value),
+                    color: color.withValues(alpha: 0.3 * alpha),
                     width: 2,
                   ),
                 ),
-                child: Icon(statusIcon, size: 36, color: statusColor),
+                child: Icon(icon, size: 36, color: color),
               );
             },
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(statusText, style: AppTypography.labelLarge.copyWith(color: statusColor)),
-          if (state == BluetoothConnectionState.connected) ...[
-            const SizedBox(height: AppSpacing.lg),
-            if (_isInitializing)
-              Column(
-                children: [
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text('Initializing OBD adapter...', style: AppTypography.bodySmall),
-                ],
-              )
-            else
-              ElevatedButton.icon(
-                icon: const Icon(Icons.check, size: 18),
-                label: const Text('Start Monitoring'),
-                onPressed: () => context.go('/'),
-              ),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(
-              onPressed: () => btService.disconnect(),
-              child: Text('Disconnect', style: TextStyle(color: AppColors.critical)),
-            ),
-          ],
+          Text(text, style: AppTypography.labelLarge.copyWith(color: color),
+              textAlign: TextAlign.center),
         ],
       ),
     );
@@ -255,14 +593,7 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
                     )
                   : const Icon(Icons.search, size: 18),
               label: Text(isScanning ? 'Scanning...' : 'Scan'),
-              onPressed: isScanning
-                  ? null
-                  : () async {
-                      setState(() => _errorMessage = null);
-                      final granted = await _ensureBluetoothPermissions();
-                      if (!granted) return;
-                      ref.read(bluetoothDevicesProvider.notifier).startScan();
-                    },
+              onPressed: isScanning ? null : () => _startFreshScan(),
             ),
           ],
         ),
@@ -432,10 +763,7 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
     );
   }
 
-  Widget _buildHealthCard(AsyncValue<BluetoothConnectionState> btState) {
-    final state = btState.value ?? BluetoothConnectionState.disconnected;
-    final isConnected = state == BluetoothConnectionState.connected;
-
+  Widget _buildHealthCard(bool isConnected) {
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,8 +802,32 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
     );
   }
 
+  // ─── Actions ───
+
+  Future<void> _reconnectToAdapter(ObdAdapter adapter, BluetoothService btService) async {
+    final granted = await _ensureBluetoothPermissions();
+    if (!granted) return;
+    // Connect directly — no scan needed
+    final device = BluetoothDeviceInfo(name: adapter.name, address: adapter.address);
+    await _connectToDevice(device, btService);
+  }
+
+  void _startFreshScan() async {
+    setState(() => _errorMessage = null);
+    final granted = await _ensureBluetoothPermissions();
+    if (!granted) return;
+    ref.read(bluetoothDevicesProvider.notifier).startScan();
+  }
+
+  Future<void> _forgetAdapter() async {
+    final vehicle = ref.read(activeVehicleProvider);
+    if (vehicle == null) return;
+
+    final repo = ref.read(vehicleRepositoryProvider);
+    await repo.updateVehicle(vehicle.copyWith(clearObdAdapter: true));
+  }
+
   /// Request Bluetooth + location runtime permissions (Android 12+).
-  /// Returns true if all required permissions are granted.
   Future<bool> _ensureBluetoothPermissions() async {
     final statuses = await [
       Permission.bluetoothScan,
@@ -498,7 +850,6 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
             'Please grant Bluetooth permissions in Settings.';
       });
 
-      // If permanently denied, offer to open app settings
       if (statuses.values.any((s) => s.isPermanentlyDenied)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -543,6 +894,9 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
 
       setState(() => _isInitializing = true);
 
+      // Save adapter to Firestore on first successful connect
+      await _saveAdapterToFirestore(device);
+
       // Initialize OBD adapter with real AT command sequence
       final obdService = ref.read(obdServiceProvider);
       final success = await obdService.initialize();
@@ -561,8 +915,7 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
       obdService.startPolling();
       diag.info('BT', 'OBD polling started');
 
-      // Auto-start recording to Firestore — only if engine is confirmed running
-      // (RPM gate prevents recording bogus data during key-on-engine-off)
+      // Auto-start recording to Firestore
       final recorder = ref.read(driveRecorderProvider);
       final uid = ref.read(authStateProvider).value?.uid;
       final vehicle = ref.read(activeVehicleProvider);
@@ -596,6 +949,25 @@ class _BluetoothSetupScreenState extends ConsumerState<BluetoothSetupScreen>
         _connectingAddress = null;
       });
     }
+  }
+
+  /// Save the adapter info to Firestore on the active vehicle doc.
+  Future<void> _saveAdapterToFirestore(BluetoothDeviceInfo device) async {
+    final vehicle = ref.read(activeVehicleProvider);
+    if (vehicle == null) return;
+    // Only save if not already saved (or address changed)
+    if (vehicle.obdAdapter?.address == device.address) return;
+
+    final adapter = ObdAdapter(
+      name: device.name,
+      address: device.address,
+      type: device.isOBDLink ? 'OBDLink MX+' : 'ELM327',
+      pairedAt: DateTime.now(),
+    );
+
+    final repo = ref.read(vehicleRepositoryProvider);
+    await repo.updateVehicle(vehicle.copyWith(obdAdapter: adapter));
+    diag.info('BT', 'Saved adapter to Firestore', '${adapter.name} (${adapter.address})');
   }
 }
 

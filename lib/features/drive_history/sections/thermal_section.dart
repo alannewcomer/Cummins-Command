@@ -8,30 +8,31 @@ import '../../../widgets/common/glass_card.dart';
 /// parameter with avg marker and time-at-warning/critical.
 class ThermalSection extends StatelessWidget {
   final DriveStats stats;
+  final void Function(String paramId)? onParamTap;
 
-  const ThermalSection({super.key, required this.stats});
+  const ThermalSection({super.key, required this.stats, this.onParamTap});
 
   @override
   Widget build(BuildContext context) {
     final params = <_ThermalParam>[
       if (stats.egt.hasData)
-        _ThermalParam('EGT 1', stats.egt, 0, 1500, 900, 1100),
+        _ThermalParam('EGT 1', stats.egt, 0, 1500, 900, 1100, 'egt'),
       if (stats.egt2.hasData)
-        _ThermalParam('EGT 2', stats.egt2, 0, 1500, 900, 1100),
+        _ThermalParam('EGT 2', stats.egt2, 0, 1500, 900, 1100, 'egt2'),
       if (stats.egt3.hasData)
-        _ThermalParam('EGT 3', stats.egt3, 0, 1500, 900, 1100),
+        _ThermalParam('EGT 3', stats.egt3, 0, 1500, 900, 1100, 'egt3'),
       if (stats.egt4.hasData)
-        _ThermalParam('EGT 4', stats.egt4, 0, 1500, 900, 1100),
+        _ThermalParam('EGT 4', stats.egt4, 0, 1500, 900, 1100, 'egt4'),
       if (stats.trans.hasData)
-        _ThermalParam('Trans', stats.trans, 100, 280, 200, 220),
+        _ThermalParam('Trans', stats.trans, 100, 280, 200, 220, 'transTemp'),
       if (stats.coolant.hasData)
-        _ThermalParam('Coolant', stats.coolant, 100, 260, 210, 220),
+        _ThermalParam('Coolant', stats.coolant, 100, 260, 210, 220, 'coolantTemp'),
       if (stats.oilTemp.hasData)
-        _ThermalParam('Oil', stats.oilTemp, 100, 280, 230, 240),
+        _ThermalParam('Oil', stats.oilTemp, 100, 280, 230, 240, 'oilTemp'),
       if (stats.intakeTemp.hasData)
-        _ThermalParam('Intake', stats.intakeTemp, 0, 220, 120, 160),
+        _ThermalParam('Intake', stats.intakeTemp, 0, 220, 120, 160, 'intakeTemp'),
       if (stats.intercoolerTemp.hasData)
-        _ThermalParam('IC Outlet', stats.intercoolerTemp, 0, 250, 150, 180),
+        _ThermalParam('IC Outlet', stats.intercoolerTemp, 0, 250, 150, 180, 'intercoolerOutletTemp'),
     ];
 
     if (params.isEmpty) return const SizedBox.shrink();
@@ -58,7 +59,12 @@ class ThermalSection extends StatelessWidget {
               children: [
                 for (int i = 0; i < params.length; i++) ...[
                   if (i > 0) const SizedBox(height: AppSpacing.lg),
-                  _ThermalBar(param: params[i]),
+                  _ThermalBar(
+                    param: params[i],
+                    onTap: onParamTap != null
+                        ? () => onParamTap!(params[i].paramId)
+                        : null,
+                  ),
                 ],
               ],
             ),
@@ -76,6 +82,7 @@ class _ThermalParam {
   final double scaleMax;
   final double warnThresh;
   final double critThresh;
+  final String paramId;
 
   const _ThermalParam(
     this.label,
@@ -84,13 +91,15 @@ class _ThermalParam {
     this.scaleMax,
     this.warnThresh,
     this.critThresh,
+    this.paramId,
   );
 }
 
 class _ThermalBar extends StatelessWidget {
   final _ThermalParam param;
+  final VoidCallback? onTap;
 
-  const _ThermalBar({required this.param});
+  const _ThermalBar({required this.param, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +129,10 @@ class _ThermalBar extends StatelessWidget {
 
     final deg = String.fromCharCode(0x00B0);
 
-    return Column(
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Label row
@@ -162,6 +174,11 @@ class _ThermalBar extends StatelessWidget {
                     color: maxColor,
                   ),
                 ),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.open_in_new, size: 10,
+                      color: AppColors.textTertiary),
+                ],
               ],
             ),
           ],
@@ -294,6 +311,7 @@ class _ThermalBar extends StatelessWidget {
           ),
         ],
       ],
+    ),
     );
   }
 }

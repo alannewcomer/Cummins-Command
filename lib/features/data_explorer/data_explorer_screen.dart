@@ -127,6 +127,8 @@ class _DataExplorerScreenState extends ConsumerState<DataExplorerScreen>
           // Time range selector
           _TimeRangeSelector(
             current: timeRange.preset,
+            customStart: timeRange.preset == TimeRangePreset.custom ? timeRange.start : null,
+            customEnd: timeRange.preset == TimeRangePreset.custom ? timeRange.end : null,
             onSelect: (preset) {
               HapticFeedback.lightImpact();
               ref.read(timeRangeProvider.notifier).setPreset(preset);
@@ -319,11 +321,15 @@ class _SelectedParamsRow extends StatelessWidget {
 
 class _TimeRangeSelector extends StatelessWidget {
   final TimeRangePreset current;
+  final DateTime? customStart;
+  final DateTime? customEnd;
   final void Function(TimeRangePreset) onSelect;
 
   const _TimeRangeSelector({
     required this.current,
     required this.onSelect,
+    this.customStart,
+    this.customEnd,
   });
 
   static const _presets = [
@@ -338,45 +344,134 @@ class _TimeRangeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      child: Row(
-        children: _presets.map((preset) {
-          final isSelected = current == preset.$1;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: GestureDetector(
-                onTap: () => onSelect(preset.$1),
-                child: AnimatedContainer(
-                  duration: AppTheme.animDuration,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withValues(alpha: 0.15)
-                        : AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(AppRadius.small),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.5)
-                          : AppColors.surfaceBorder,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      preset.$2,
-                      style: AppTypography.labelMedium.copyWith(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Custom range indicator (when navigated from a drive)
+          if (current == TimeRangePreset.custom &&
+              customStart != null &&
+              customEnd != null) ...[
+            _CustomRangeBanner(
+              start: customStart!,
+              end: customEnd!,
+              onClear: () => onSelect(TimeRangePreset.days7),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          // Preset buttons
+          Row(
+            children: _presets.map((preset) {
+              final isSelected = current == preset.$1;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: GestureDetector(
+                    onTap: () => onSelect(preset.$1),
+                    child: AnimatedContainer(
+                      duration: AppTheme.animDuration,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
                         color: isSelected
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w400,
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(AppRadius.small),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : AppColors.surfaceBorder,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          preset.$2,
+                          style: AppTypography.labelMedium.copyWith(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w400,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows the active custom date range with a clear button.
+class _CustomRangeBanner extends StatelessWidget {
+  final DateTime start;
+  final DateTime end;
+  final VoidCallback onClear;
+
+  const _CustomRangeBanner({
+    required this.start,
+    required this.end,
+    required this.onClear,
+  });
+
+  String _formatShort(DateTime dt) {
+    final m = dt.month;
+    final d = dt.day;
+    final h = dt.hour;
+    final min = dt.minute.toString().padLeft(2, '0');
+    final amPm = h >= 12 ? 'PM' : 'AM';
+    final h12 = h > 12 ? h - 12 : (h == 0 ? 12 : h);
+    return '$m/$d $h12:$min $amPm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.dataAccent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.small),
+        border: Border.all(
+          color: AppColors.dataAccent.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.date_range, size: 14, color: AppColors.dataAccent),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              '${_formatShort(start)} \u2014 ${_formatShort(end)}',
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.dataAccent,
+                fontWeight: FontWeight.w600,
               ),
             ),
-          );
-        }).toList(),
+          ),
+          GestureDetector(
+            onTap: onClear,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(AppRadius.round),
+              ),
+              child: Text(
+                'Clear',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

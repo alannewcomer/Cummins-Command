@@ -69,6 +69,7 @@ class DriveRecorder {
   int _datapointCount = 0;
   double _totalFuelUsed = 0.0;
   double _totalDistance = 0.0;
+  double _totalIdleSeconds = 0.0;
   DateTime? _recordingStart;
   DateTime? _lastDataTimestamp; // For accurate interval calculation
   int _dpfRegenCount = 0;
@@ -309,6 +310,7 @@ class DriveRecorder {
     _datapointCount = 0;
     _totalFuelUsed = 0.0;
     _totalDistance = 0.0;
+    _totalIdleSeconds = 0.0;
     _stats.clear();
     _dpfRegenCount = 0;
     _dpfRegenSeconds = 0;
@@ -441,6 +443,7 @@ class DriveRecorder {
       averageMPG: avgMpg,
       instantMPGMin: _stats['instantMPG']?.min,
       instantMPGMax: _stats['instantMPG']?.max,
+      idleSeconds: _totalIdleSeconds.toInt(),
       maxBoostPsi: _stats['boostPressureCtrl']?.max,
       maxEgtF: _stats['egtObd2']?.max,
       maxCoolantTempF: _stats['coolantTemp']?.max,
@@ -623,22 +626,55 @@ class DriveRecorder {
   }
 
   void _calculateDerived(Map<String, double> data) {
-    // Instant MPG = speed / (fuelRate * some conversion)
-    // fuelRate is in gph, speed is in mph
-    // MPG = mph / gph
     final speed = data['speed'];
-    final fuelRate = data['fuelRate'];
+    final rpm = data['rpm'] ?? data['engineSpeed'];
 
+    // ── Estimate fuel rate (PID 0x5E unsupported on 2026 6.7L Cummins) ──
+    // Use MAF (0x10) with a load-adjusted diesel AFR curve.
+    // Fallback: estimate air flow from engine load (0x04) + RPM + displacement.
+    if (data['fuelRate'] == null && rpm != null && rpm > 0) {
+      final maf = data['maf'];
+      final load = data['engineLoadObd2'] ?? 25.0;
+
+      double? airGs;
+      if (maf != null && maf > 0) {
+        airGs = maf;
+      } else if (load > 0) {
+        // Volumetric estimate: 6.7L 4-stroke, 1.184 g/L air at STP
+        airGs = (load / 100.0) * 3.35 * (rpm / 60.0) * 1.184;
+      }
+
+      if (airGs != null && airGs > 0) {
+        // Diesel AFR: lean at idle (~55:1), richer under load (~18:1)
+        final double afr;
+        if (load <= 20) {
+          afr = 55.0 - load * 0.85;
+        } else if (load <= 50) {
+          afr = 38.0 - (load - 20) * 0.433;
+        } else if (load <= 80) {
+          afr = 25.0 - (load - 50) * 0.2;
+        } else {
+          afr = 19.0 - (load - 80) * 0.05;
+        }
+
+        // fuel_g/s = air_g/s / AFR → gal/hr (diesel ≈ 3149 g/gal)
+        final gph = airGs / afr * 3600.0 / 3149.0;
+        data['fuelRate'] = gph.clamp(0.15, 50.0);
+
+        _stats.putIfAbsent('fuelRate', () => _RunningStats());
+        _stats['fuelRate']!.add(data['fuelRate']!);
+      }
+    }
+
+    // Instant MPG = speed(mph) / fuelRate(gph)
+    final fuelRate = data['fuelRate'];
     if (speed != null && fuelRate != null && fuelRate > 0.1) {
-      final instantMpg = speed / fuelRate;
-      // Clamp to reasonable range (0-99 mpg for a diesel truck)
-      data['instantMPG'] = instantMpg.clamp(0.0, 99.0);
+      data['instantMPG'] = (speed / fuelRate).clamp(0.0, 99.0);
       _stats.putIfAbsent('instantMPG', () => _RunningStats());
       _stats['instantMPG']!.add(data['instantMPG']!);
     }
 
     // Estimated gear from speed and RPM
-    final rpm = data['rpm'] ?? data['engineSpeed'];
     if (speed != null && rpm != null && speed > 5 && rpm > 300) {
       final ratio = rpm / speed;
       int gear;
@@ -682,6 +718,11 @@ class DriveRecorder {
     // Accumulate distance: mph x elapsed seconds / 3600 = miles
     if (speed != null && speed > 0) {
       _totalDistance += speed / 3600.0 * dtClamped;
+    }
+
+    // Accumulate idle time: speed < 2 mph = idle
+    if (speed != null && speed < 2) {
+      _totalIdleSeconds += dtClamped;
     }
   }
 

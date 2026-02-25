@@ -143,6 +143,18 @@ class ObdService {
     _bitmapRefreshedSinceRunning = false;
     _liveData.clear();
     _pidStatus.clear();
+
+    // Reset engine state so the state machine can re-detect from scratch.
+    // Without this, a stale EngineState.off from before disconnect gets
+    // stuck: _setEngineState(off) is a no-op, the lifecycle provider never
+    // gets the off event, and polling runs forever on a dead engine.
+    _engineState = EngineState.unknown;
+    _rpmZeroSince = null;
+    _lowVoltageSince = null;
+    _alternatorOffSince = null;
+    _accessoryTimeoutSince = null;
+    _runningPeakVoltage = 0.0;
+
     diag.info(_tag, 'Starting OBD initialization');
 
     try {

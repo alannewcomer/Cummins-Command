@@ -8,39 +8,40 @@ import '../../../widgets/common/glass_card.dart';
 /// Load, Throttle, Turbo, Rail Pressure, Est. HP/Torque.
 class EngineSection extends StatelessWidget {
   final DriveStats stats;
+  final void Function(String paramId)? onParamTap;
 
-  const EngineSection({super.key, required this.stats});
+  const EngineSection({super.key, required this.stats, this.onParamTap});
 
   @override
   Widget build(BuildContext context) {
     final rows = <_EngineRow>[
       if (stats.avgRpm > 0 || stats.maxRpm > 0)
         _EngineRow('RPM', stats.avgRpm.toStringAsFixed(0),
-            stats.maxRpm.toStringAsFixed(0), ''),
+            stats.maxRpm.toStringAsFixed(0), '', 'rpm'),
       if (stats.avgBoostPsi > 0 || stats.maxBoostPsi > 0)
         _EngineRow('Boost', stats.avgBoostPsi.toStringAsFixed(1),
-            stats.maxBoostPsi.toStringAsFixed(1), 'PSI'),
+            stats.maxBoostPsi.toStringAsFixed(1), 'PSI', 'boostPressure'),
       if (stats.avgLoadPercent > 0 || stats.maxLoadPercent > 0)
         _EngineRow('Load', stats.avgLoadPercent.toStringAsFixed(0),
-            stats.maxLoadPercent.toStringAsFixed(0), '%'),
+            stats.maxLoadPercent.toStringAsFixed(0), '%', 'engineLoad'),
       if (stats.avgThrottlePercent > 0 || stats.maxThrottlePercent > 0)
         _EngineRow('Throttle', stats.avgThrottlePercent.toStringAsFixed(0),
-            stats.maxThrottlePercent.toStringAsFixed(0), '%'),
+            stats.maxThrottlePercent.toStringAsFixed(0), '%', 'throttlePos'),
       if (stats.maxTurboSpeedRpm > 0)
         _EngineRow('Turbo', '-',
-            '${(stats.maxTurboSpeedRpm / 1000).toStringAsFixed(0)}k', 'RPM'),
+            '${(stats.maxTurboSpeedRpm / 1000).toStringAsFixed(0)}k', 'RPM', 'turboSpeed'),
       if (stats.maxRailPressurePsi > 0)
         _EngineRow(
             'Rail Press.',
             '-',
             '${(stats.maxRailPressurePsi / 1000).toStringAsFixed(1)}k',
-            'PSI'),
+            'PSI', 'railPressure'),
       if (stats.maxEstimatedHp > 0)
         _EngineRow('Est. HP', '-',
-            stats.maxEstimatedHp.toStringAsFixed(0), ''),
+            stats.maxEstimatedHp.toStringAsFixed(0), '', 'estimatedHP'),
       if (stats.maxEstimatedTorque > 0)
         _EngineRow('Est. Torque', '-',
-            stats.maxEstimatedTorque.toStringAsFixed(0), 'ft-lb'),
+            stats.maxEstimatedTorque.toStringAsFixed(0), 'ft-lb', 'estimatedTorque'),
     ];
 
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -124,52 +125,66 @@ class EngineSection extends StatelessWidget {
                 ...rows.asMap().entries.map((entry) {
                   final i = entry.key;
                   final row = entry.value;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: i.isEven
-                          ? Colors.transparent
-                          : AppColors.surfaceLight.withValues(alpha: 0.3),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            row.label,
-                            style: AppTypography.labelMedium.copyWith(
-                              color: AppColors.textSecondary,
+                  return GestureDetector(
+                    onTap: onParamTap != null
+                        ? () => onParamTap!(row.paramId)
+                        : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.md,
+                      ),
+                      decoration: BoxDecoration(
+                        color: i.isEven
+                            ? Colors.transparent
+                            : AppColors.surfaceLight.withValues(alpha: 0.3),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              row.label,
+                              style: AppTypography.labelMedium.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            row.avg == '-'
-                                ? '-'
-                                : '${row.avg}${row.unit.isNotEmpty ? ' ${row.unit}' : ''}',
-                            style: AppTypography.dataSmall.copyWith(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              row.avg == '-'
+                                  ? '-'
+                                  : '${row.avg}${row.unit.isNotEmpty ? ' ${row.unit}' : ''}',
+                              style: AppTypography.dataSmall.copyWith(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                              textAlign: TextAlign.right,
                             ),
-                            textAlign: TextAlign.right,
                           ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            '${row.max}${row.unit.isNotEmpty ? ' ${row.unit}' : ''}',
-                            style: AppTypography.dataSmall.copyWith(
-                              fontSize: 12,
-                              color: AppColors.primary,
+                          Expanded(
+                            flex: 2,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${row.max}${row.unit.isNotEmpty ? ' ${row.unit}' : ''}',
+                                  style: AppTypography.dataSmall.copyWith(
+                                    fontSize: 12,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                if (onParamTap != null) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.open_in_new, size: 10,
+                                      color: AppColors.textTertiary),
+                                ],
+                              ],
                             ),
-                            textAlign: TextAlign.right,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 }),
@@ -187,6 +202,7 @@ class _EngineRow {
   final String avg;
   final String max;
   final String unit;
+  final String paramId;
 
-  const _EngineRow(this.label, this.avg, this.max, this.unit);
+  const _EngineRow(this.label, this.avg, this.max, this.unit, this.paramId);
 }

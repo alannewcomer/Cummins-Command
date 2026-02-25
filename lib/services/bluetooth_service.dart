@@ -16,6 +16,14 @@ enum BluetoothConnectionState {
   error,
 }
 
+/// Sleep reconnect phase — observable state for UX layer.
+enum SleepReconnectPhase {
+  none,
+  phaseA, // Quick restart detection (0-5 min, polling every 30s)
+  phaseB, // Quiet period (5-35 min, letting MX+ BatterySaver power down)
+  phaseC, // Background polling (35+ min, 60s intervals)
+}
+
 /// Represents a discovered Bluetooth device.
 class BluetoothDeviceInfo {
   final String name;
@@ -276,6 +284,9 @@ class BluetoothService {
   int _sleepReconnectAttempts = 0;
   /// When the last sleep disconnect happened — used for loop detection.
   DateTime? _lastSleepDisconnect;
+  SleepReconnectPhase _sleepPhase = SleepReconnectPhase.none;
+  /// When disconnectForSleep was called — used for elapsed time in UX.
+  DateTime? _sleepDisconnectTime;
 
   final StreamController<BluetoothConnectionState> _stateController =
       StreamController<BluetoothConnectionState>.broadcast();
@@ -296,6 +307,15 @@ class BluetoothService {
   String? get lastError => _lastError;
   bool get isConnected => _state == BluetoothConnectionState.connected;
   int get reconnectAttempts => _reconnectAttempts;
+
+  /// Current sleep reconnect phase (none when not sleeping).
+  SleepReconnectPhase get sleepPhase => _sleepPhase;
+
+  /// Number of reconnect attempts during current sleep cycle.
+  int get sleepReconnectAttempts => _sleepReconnectAttempts;
+
+  /// When the sleep disconnect started (null if not sleeping).
+  DateTime? get sleepDisconnectTime => _sleepDisconnectTime;
 
   /// Stream of connection state changes.
   Stream<BluetoothConnectionState> get stateStream => _stateController.stream;
@@ -361,6 +381,7 @@ class BluetoothService {
       _sleepAddress = null;
       _sleepReconnectTimer?.cancel();
       _sleepReconnectAttempts = 0;
+      _setSleepPhase(SleepReconnectPhase.none);
 
       // Start listening for incoming data
       _inputSubscription?.cancel();
@@ -404,6 +425,7 @@ class BluetoothService {
     _sleepReconnectTimer?.cancel();
     _sleepAddress = null;
     _sleepReconnectAttempts = 0;
+    _setSleepPhase(SleepReconnectPhase.none);
     _healthCheckTimer?.cancel();
     _inputSubscription?.cancel();
     _pendingResponse?.completeError(
@@ -436,6 +458,7 @@ class BluetoothService {
   Future<void> disconnectForSleep() async {
     diag.info('BT-SVC', 'Sleep disconnect — sending AT LP before disconnect');
     _sleepDisconnect = true;
+    _sleepDisconnectTime = DateTime.now();
     _autoReconnectEnabled = false;
     _reconnectTimer?.cancel();
 
@@ -622,6 +645,18 @@ class BluetoothService {
     _setState(BluetoothConnectionState.error);
   }
 
+  void _setSleepPhase(SleepReconnectPhase phase) {
+    if (_sleepPhase == phase) return;
+    _sleepPhase = phase;
+    if (phase == SleepReconnectPhase.none) {
+      _sleepDisconnectTime = null;
+    }
+    // Re-emit current connection state to trigger provider rebuilds
+    if (!_disposed && !_stateController.isClosed) {
+      _stateController.add(_state);
+    }
+  }
+
   void _onDataReceived(Uint8List data) {
     if (_disposed) return;
 
@@ -733,6 +768,7 @@ class BluetoothService {
 
   /// Phase A: Quick restart detection — every 30s for 5 minutes.
   void _startPhaseA() {
+    _setSleepPhase(SleepReconnectPhase.phaseA);
     final maxAttempts = AppConstants.sleepReconnectPhaseADuration.inSeconds ~/
         AppConstants.sleepReconnectPhaseAInterval.inSeconds;
 
@@ -776,6 +812,7 @@ class BluetoothService {
   /// (BT radio OFF). We must not poke it during this window.
   /// After the quiet period, transition to Phase C.
   void _startPhaseB() {
+    _setSleepPhase(SleepReconnectPhase.phaseB);
     _sleepReconnectTimer?.cancel();
     _sleepReconnectTimer = Timer(
       AppConstants.sleepReconnectPhaseBDuration,
@@ -795,6 +832,7 @@ class BluetoothService {
   /// impact on truck battery. When the truck starts, CAN activity wakes the
   /// MX+, BT radio turns on, and our next attempt succeeds.
   void _startPhaseC() {
+    _setSleepPhase(SleepReconnectPhase.phaseC);
     _sleepReconnectTimer?.cancel();
 
     diag.info('BT-SVC', 'Phase C started',
